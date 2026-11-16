@@ -1,0 +1,11 @@
+{
+  "name": "delivery-route",
+  "version": "0.1.0",
+  "private": true,
+  "description": "배송 경로 최적화 및 운행일지 시스템(Google Apps Script)",
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "push": "clasp push",
+    "deploy": "clasp deploy"
+  }
+}
