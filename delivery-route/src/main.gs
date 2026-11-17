@@ -84,6 +84,11 @@ function planDay(date) {
 }
 
 function planDayLocked_(date) {
+  try {
+    pruneLegCache_(date);
+  } catch (e) {
+    logError_('구간캐시정리', e && e.message ? e.message : e);
+  }
   var s = readSettings_();
   if (s.companyLat === null || s.companyLng === null) {
     if (!s.companyAddress) throw new Error('설정 시트에 회사주소를 입력하세요.');

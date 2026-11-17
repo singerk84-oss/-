@@ -226,3 +226,38 @@ function buildVehicleMatrices(date, points, vehicles) {
   });
   return out;
 }
+
+/**
+ * 구간캐시에서 지난 날짜 행을 지운다(배차 계산 때 자동 실행).
+ * 설정 탭 '구간캐시보관일수'(기본 0 = 오늘 것만 남김)만큼 지난 날짜도 남긴다.
+ * 행을 하나씩 지우면 느리므로 남길 행만 모아 한 번에 다시 쓴다.
+ * @return {number} 지운 행 수
+ */
+function pruneLegCache_(today) {
+  var keep = toNumber(getProp_('LEG_CACHE_KEEP_DAYS'), 0);
+  var cutoff = shiftDateKey_(today, -Math.max(0, Math.floor(keep)));
+  var sh = getSheet_(SHEET.LEG_CACHE, HEADERS.LEG_CACHE);
+  var lastRow = sh.getLastRow();
+  var lastCol = sh.getLastColumn();
+  if (lastRow < 2) return 0;
+  var dateCol = headerIndex_(sh)['일자'];
+  if (!dateCol) return 0;
+  var rows = sh.getRange(2, 1, lastRow - 1, lastCol).getValues();
+  var kept = rows.filter(function (r) {
+    var d = dateKey_(r[dateCol - 1]);
+    return d === '' || d >= cutoff;
+  });
+  var removed = rows.length - kept.length;
+  if (!removed) return 0;
+  sh.getRange(2, 1, rows.length, lastCol).clearContent();
+  if (kept.length) sh.getRange(2, 1, kept.length, lastCol).setValues(kept);
+  if (legMemo_ && legMemo_.date < cutoff) legMemo_ = null;
+  return removed;
+}
+
+/** 'yyyy-MM-dd'에 일수를 더한다 */
+function shiftDateKey_(key, days) {
+  var p = key.split('-').map(Number);
+  var d = new Date(Date.UTC(p[0], p[1] - 1, p[2] + days));
+  return d.getUTCFullYear() + '-' + ('0' + (d.getUTCMonth() + 1)).slice(-2) + '-' + ('0' + d.getUTCDate()).slice(-2);
+}

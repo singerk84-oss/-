@@ -20,6 +20,10 @@ class Range {
     return this;
   }
   setValue(v) { this.sheet.set(this.row, this.col, v); return this; }
+  clearContent() {
+    for (let r = 0; r < this.nr; r++) for (let c = 0; c < this.nc; c++) this.sheet.set(this.row + r, this.col + c, '');
+    return this;
+  }
   setFontWeight() { return this; }
   setBackgrounds(m) { m.forEach((line, r) => line.forEach((v, c) => this.sheet.setBg(this.row + r, this.col + c, v))); return this; }
   setBackground(v) { this.sheet.setBg(this.row, this.col, v); return this; }

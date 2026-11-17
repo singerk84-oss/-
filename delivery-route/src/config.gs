@@ -93,7 +93,8 @@ var SHEET_CONFIG = {
   ROUTE_PROVIDER: '경로제공자',
   NAV_APP: '길안내앱',
   NOTIFY_MODE: '전송방식',
-  NOTIFY_EMAIL: '전송이메일'
+  NOTIFY_EMAIL: '전송이메일',
+  LEG_CACHE_KEEP_DAYS: '구간캐시보관일수'
 };
 var sheetConfigMemo_ = null;
 

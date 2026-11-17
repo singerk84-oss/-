@@ -194,3 +194,26 @@ test('회차 탭에 경유지가 표시되고 완료된 경유지는 녹색', ()
   const other = table(vctx, '회차').find((x) => x['차량ID'] === 'V5');
   assert.strictEqual(sh.bg[other._row + ',' + wp1] || null, null);
 });
+
+test('배차 계산 때 구간캐시의 지난 날짜 행을 자동 삭제', () => {
+  const { g, vctx } = setup();
+  vctx.menuCheckTemplate();
+  const cache = g.ss.getSheetByName('구간캐시');
+  cache.appendRow(['2026-11-10', 'estimate', '1,1', '2,2', 100, 10, 'estimate']);
+  cache.appendRow(['2026-11-15', 'estimate', '1,1', '2,2', 100, 10, 'estimate']);
+  cache.appendRow(['2026-11-16', 'estimate', '9,9', '8,8', 100, 10, 'estimate']);
+  vctx.menuSample();
+  vctx.menuPlan();
+  const dates = table(vctx, '구간캐시').map((r) => r['일자']);
+  assert.ok(dates.length > 1);
+  assert.ok(dates.every((d) => d === '2026-11-16'), '오늘 것만 남음: ' + [...new Set(dates)]);
+  assert.ok(table(vctx, '구간캐시').some((r) => r['출발좌표'] === '9,9'), '오늘 기존 캐시는 유지');
+
+  // 보관일수 2 → 11-14 이후는 남긴다
+  cache.appendRow(['2026-11-14', 'estimate', '1,1', '2,2', 100, 10, 'estimate']);
+  cache.appendRow(['2026-11-13', 'estimate', '1,1', '2,2', 100, 10, 'estimate']);
+  g.ss.getSheetByName('설정').appendRow(['구간캐시보관일수', 2, '']);
+  vm.runInContext('sheetConfigMemo_ = null', vctx);
+  assert.strictEqual(vctx.pruneLegCache_('2026-11-16'), 1);
+  assert.ok(table(vctx, '구간캐시').some((r) => r['일자'] === '2026-11-14'));
+});
