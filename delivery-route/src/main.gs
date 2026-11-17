@@ -32,9 +32,9 @@ function menuGeocode() {
 }
 
 function menuPlan() {
-  var date = todayKey_();
+  var date = workDateKey_();
   if (hasStartedLogs_(date)) {
-    alert_('오늘 운행이 이미 시작되어 재계산할 수 없습니다.\n변경이 필요하면 운행일지의 해당 일자 기록을 정리한 뒤 다시 실행하세요.');
+    alert_(date + ' 운행이 이미 시작되어 재계산할 수 없습니다.\n변경이 필요하면 운행일지의 해당 일자 기록을 정리한 뒤 다시 실행하세요.');
     return;
   }
   var r = planDay(date);
@@ -47,16 +47,16 @@ function menuPlan() {
 }
 
 function menuSyncWaypoints() {
-  var n = syncTripWaypoints_(todayKey_());
+  var n = syncTripWaypoints_(workDateKey_());
   alert_('회차 ' + n + '개의 경유지 표시를 새로 고쳤습니다. 완료된 경유지는 녹색입니다.');
 }
 
 function menuLinks() {
-  alert_('링크 ' + generateLinks(todayKey_()) + '개를 다시 만들었습니다.');
+  alert_('링크 ' + generateLinks(workDateKey_()) + '개를 다시 만들었습니다.');
 }
 
 function menuSend() {
-  var r = sendTripLinks(todayKey_());
+  var r = sendTripLinks(workDateKey_());
   alert_(r.sent + '개 회차 링크를 전송했습니다(' + r.mode + ').');
 }
 
@@ -269,7 +269,7 @@ function menuSample() {
   ];
   var cust = getSheet_(SHEET.CUSTOMERS);
   var today = getSheet_(SHEET.TODAY);
-  var date = todayKey_();
+  var date = workDateKey_();
   sample.forEach(function (x) {
     appendRow_(cust, {
       '거래처명': x[0], '주소': '(예시 좌표)',

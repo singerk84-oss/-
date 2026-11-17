@@ -99,7 +99,8 @@ var SHEET_CONFIG = {
   ROUTE_PROVIDER: '경로제공자',
   NOTIFY_MODE: '전송방식',
   NOTIFY_EMAIL: '전송이메일',
-  LEG_CACHE_KEEP_DAYS: '구간캐시보관일수'
+  LEG_CACHE_KEEP_DAYS: '구간캐시보관일수',
+  WORK_DATE: '작업일자'
 };
 var sheetConfigMemo_ = null;
 
@@ -112,7 +113,8 @@ function getProp_(key) {
       var sh = getSpreadsheet_().getSheetByName(SHEET.SETTINGS);
       if (sh && sh.getLastRow() > 0) {
         sh.getRange(1, 1, sh.getLastRow(), 2).getValues().forEach(function (r) {
-          sheetConfigMemo_[String(r[0]).trim()] = String(r[1]).trim();
+          var val = Object.prototype.toString.call(r[1]) === '[object Date]' ? dateKey_(r[1]) : String(r[1]).trim();
+          sheetConfigMemo_[String(r[0]).trim()] = val;
         });
       }
     } catch (e) {

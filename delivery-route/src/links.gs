@@ -66,7 +66,7 @@ function navLinks_(name, lat, lng) {
 
 /** 회차 시트의 모든 회차(해당 일자)에 링크를 채운다 */
 function generateLinks(date) {
-  date = date || todayKey_();
+  date = date || workDateKey_();
   var sh = getSheet_(SHEET.TRIPS, HEADERS.TRIPS);
   var count = 0;
   readTable_(SHEET.TRIPS, HEADERS.TRIPS).forEach(function (r) {

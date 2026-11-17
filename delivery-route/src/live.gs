@@ -9,10 +9,11 @@
  */
 
 function menuAddPickupsLive() {
-  var date = todayKey_();
+  var date = workDateKey_();
   var r = addPickupsLive(date);
   alert_(r.lines.length ? r.lines.join('\n') : '추가할 매입 행이 없습니다.\n\n' + pickupDiagnosis_(date) +
-    '\n\n오늘배송 탭에 일자=오늘, 구분=매입, 배정차량ID가 빈 행을 넣고 다시 실행하세요.' +
+    '\n\n오늘배송 탭에 일자=' + date + ', 구분=매입, 배정차량ID가 빈 행을 넣고 다시 실행하세요.' +
+    '\n다른 날짜를 다루려면 설정 탭 작업일자에 날짜를 넣으세요.' +
     '\n(셀을 입력 중인 상태에서 메뉴를 누르면 값이 저장되기 전이라 인식되지 않습니다. Enter로 입력을 마친 뒤 실행하세요.)');
 }
 
@@ -22,7 +23,7 @@ function pickupDiagnosis_(date) {
   var today = rows.filter(function (r) { return dateKey_(r['일자']) === date; });
   var pick = today.filter(isPickupRow_);
   var assigned = pick.filter(function (r) { return String(r['배정차량ID'] || '').trim() !== ''; });
-  var lines = ['확인 결과(기준 일자 ' + date + ')',
+  var lines = ['확인 결과(기준 일자 ' + date + (date === todayKey_() ? ', 오늘' : ', 설정 탭 작업일자') + ')',
     '- 오늘배송 전체 ' + rows.length + '행, 그중 오늘 일자 ' + today.length + '행',
     '- 구분=매입 ' + pick.length + '행(이미 배정됨 ' + assigned.length + '행)'];
   var odd = rows.filter(function (r) { return dateKey_(r['일자']) !== date && isPickupRow_(r); });
@@ -165,7 +166,7 @@ function insertOnePickup_(date, todayRowNum) {
     trips: trips,
     lastReturnByVehicle: lastReturnByVehicle,
     dayStart: s.dayStart, dayEnd: s.dayEnd, loadingMin: s.loadingMin,
-    nowMin: toMinutes(nowTime_())
+    nowMin: date === todayKey_() ? toMinutes(nowTime_()) : 0
   });
 
   if (best.type === 'none') {

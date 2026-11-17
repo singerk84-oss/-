@@ -341,3 +341,21 @@ test('운행 중 매입 추가: 추가할 행이 없으면 무엇을 보았는�
   assert.match(alerts.at(-1), /추가할 매입 행이 없습니다/);
   assert.match(alerts.at(-1), /일자가 오늘이 아닌 매입 행: \d+행\(2026-11-15\)/);
 });
+
+test('설정 탭 작업일자가 있으면 그 날짜를 다룬다(자정 이후 전날 운행 처리)', () => {
+  const { g, vctx, alerts } = setup();
+  vctx.menuSample();
+  vctx.menuPlan(); // 11-16 배차
+  g.clock.now = new Date('2026-11-17T00:20:00+09:00'); // 자정 지남
+  const today = g.ss.getSheetByName('오늘배송');
+  const H = today.data[0];
+  const r = today.getLastRow() + 1;
+  today.set(r, 1, '2026-11-16'); today.set(r, 2, '예시-근거리A'); today.set(r, 3, 100); today.set(r, 4, 100);
+  today.set(r, H.indexOf('구분') + 1, '매입');
+  vctx.menuAddPickupsLive();
+  assert.match(alerts.at(-1), /일자가 오늘이 아닌 매입 행/);
+  g.ss.getSheetByName('설정').appendRow(['작업일자', new g.ctx.Date('2026-11-16T00:00:00+09:00'), '']); // 시트 날짜 값
+  vm.runInContext('sheetConfigMemo_ = null', vctx);
+  vctx.menuAddPickupsLive();
+  assert.match(alerts.at(-1), /예시-근거리A: V\d+ \d회차/);
+});

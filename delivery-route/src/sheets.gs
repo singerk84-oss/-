@@ -86,6 +86,15 @@ function todayKey_() {
   return Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
 }
 
+/**
+ * 메뉴가 다루는 일자. 설정 탭 '작업일자'(예: 2026-11-18)가 있으면 그 날짜, 비어 있으면 오늘.
+ * 전날 저녁에 다음 날 배차를 미리 계산하거나, 자정이 지난 뒤 전날 운행을 정리할 때 쓴다.
+ */
+function workDateKey_() {
+  var v = getProp_('WORK_DATE');
+  return v ? dateKey_(v) : todayKey_();
+}
+
 function nowTime_() {
   return Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'HH:mm');
 }
