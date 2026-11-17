@@ -7,7 +7,7 @@ const vm = require('vm');
 const { createGas } = require('./gas-mock');
 
 const FILES = ['config.gs', 'util.gs', 'sheets.gs', 'geocode.gs', 'matrix.gs', 'route.gs', 'assign.gs',
-  'links.gs', 'notify.gs', 'log.gs', 'webapp.gs', 'main.gs'];
+  'links.gs', 'notify.gs', 'log.gs', 'webapp.gs', 'main.gs', 'live.gs'];
 
 function setup() {
   const g = createGas({ props: { ROUTE_PROVIDER: 'estimate' } });
@@ -216,4 +216,114 @@ test('배차 계산 때 구간캐시의 지난 날짜 행을 자동 삭제', () 
   vm.runInContext('sheetConfigMemo_ = null', vctx);
   assert.strictEqual(vctx.pruneLegCache_('2026-11-16'), 1);
   assert.ok(table(vctx, '구간캐시').some((r) => r['일자'] === '2026-11-14'));
+});
+
+test('배차 계산: 오늘배송 구분=매입·우선 반영, 운행일지·기사 화면 표시', () => {
+  const { g, vctx } = setup();
+  vctx.menuSample();
+  // 근거리A 근처 매입처 추가, 근거리B를 우선으로
+  const s = { lat: 36.5, lng: 127.5 };
+  g.ss.getSheetByName('거래처').appendRow(['예시-매입처', '(예시)', s.lat + 0.05, s.lng + 0.05, 20]);
+  const today = g.ss.getSheetByName('오늘배송');
+  vctx.ensureOptionalColumns_();
+  const H = today.data[0];
+  const kindCol = H.indexOf('구분') + 1;
+  const priCol = H.indexOf('우선') + 1;
+  assert.ok(kindCol > 0 && priCol > 0, '구분·우선 컬럼 추가');
+  const rowB = today.data.findIndex((r) => r[1] === '예시-근거리B') + 1;
+  today.set(rowB, priCol, true);
+  const r = today.getLastRow() + 1;
+  today.set(r, 1, '2026-11-16'); today.set(r, 2, '예시-매입처'); today.set(r, 3, 300); today.set(r, 4, 1500);
+  today.set(r, kindCol, '매입');
+  vctx.menuPlan();
+
+  const rows = table(vctx, '오늘배송');
+  const pick = rows.find((x) => x['거래처명'] === '예시-매입처');
+  assert.ok(pick['배정차량ID'], '매입 배정');
+  const b = rows.find((x) => x['거래처명'] === '예시-근거리B');
+  assert.strictEqual(b['회차'], 1);
+  assert.strictEqual(b['방문순서'], 1);
+
+  const logPick = table(vctx, '운행일지').find((x) => x['거래처명'] === '예시-매입처');
+  assert.strictEqual(logPick['구분'], '매입');
+
+  const trip = table(vctx, '회차').find((x) => x['차량ID'] === pick['배정차량ID'] && x['회차'] === pick['회차']);
+  const p = Object.fromEntries(new URL(trip['링크']).searchParams);
+  const st = vctx.getTripState(p);
+  const ps = st.stops.find((x) => x.name === '예시-매입처');
+  assert.strictEqual(ps.isPickup, true);
+  const wps = Object.keys(trip).filter((k) => k.startsWith('경유지')).map((k) => trip[k]).join('|');
+  assert.match(wps, /\[매입\] 예시-매입처/);
+  const tripB = table(vctx, '회차').find((x) => x['차량ID'] === b['배정차량ID'] && x['회차'] === 1);
+  assert.match(tripB['경유지1'], /^★예시-근거리B/);
+});
+
+test('운행 중 매입 추가: 복귀 중인 회차의 복귀 직전에 끼워 넣고 같은 링크로 이어서 진행', () => {
+  const { g, vctx, alerts } = setup();
+  vctx.menuSample();
+  vctx.menuPlan();
+  const t10 = table(vctx, '회차').find((x) => x['차량ID'] === 'V10');
+  const p = Object.fromEntries(new URL(t10['링크']).searchParams);
+  // 원거리공장 완료 후 회사로 복귀 출발
+  g.clock.now = new Date('2026-11-16T08:30:00+09:00'); vctx.tapStop(p, 0, 'start');
+  g.clock.now = new Date('2026-11-16T12:20:00+09:00'); vctx.tapStop(p, 0, 'complete');
+  g.clock.now = new Date('2026-11-16T12:30:00+09:00'); vctx.tapStop(p, 1, 'start');
+
+  // 원거리공장과 회사 사이(동쪽 60km)에 매입처 추가 — 10톤 복귀길에 딱 맞는 위치
+  const kmLng = 1 / (111 * Math.cos(36.5 * Math.PI / 180));
+  g.ss.getSheetByName('거래처').appendRow(['예시-귀사길매입', '(예시)', 36.5, 127.5 + 60 * kmLng, 20]);
+  const today = g.ss.getSheetByName('오늘배송');
+  const H = today.data[0];
+  const r = today.getLastRow() + 1;
+  today.set(r, 1, '2026-11-16'); today.set(r, 2, '예시-귀사길매입'); today.set(r, 3, 5000); today.set(r, 4, 8500);
+  today.set(r, H.indexOf('구분') + 1, '매입');
+
+  vctx.menuAddPickupsLive();
+  assert.match(alerts.at(-1), /V10 1회차 예시-원거리공장 다음에 추가/, alerts.at(-1));
+  assert.match(alerts.at(-1), /기존 링크 그대로/);
+
+  const logs = table(vctx, '운행일지').filter((x) => x['차량ID'] === 'V10');
+  assert.deepStrictEqual(logs.map((x) => x['거래처명']), ['예시-원거리공장', '예시-귀사길매입', '회사 복귀']);
+  assert.strictEqual(logs[1]['구분'], '매입');
+  assert.strictEqual(logs[2]['출발시각'], '', '복귀 출발 기록은 지우고 매입처부터 다시');
+
+  // 같은 링크로 이어서: 현재 차례는 매입처, 버튼은 상차 완료
+  let st = vctx.getTripState(p);
+  assert.strictEqual(st.current, 1);
+  assert.strictEqual(st.stops[1].isPickup, true);
+  vctx.tapStop(p, 1, 'start');
+  vctx.tapStop(p, 1, 'complete');
+  st = vctx.tapStop(p, 2, 'start');
+  st = vctx.tapStop(p, 2, 'complete');
+  assert.strictEqual(st.tripDone, true);
+
+  const added = table(vctx, '오늘배송').find((x) => x['거래처명'] === '예시-귀사길매입');
+  assert.strictEqual(added['배정차량ID'], 'V10');
+  assert.strictEqual(added['방문순서'], 2);
+  const trip = table(vctx, '회차').find((x) => x['차량ID'] === 'V10');
+  assert.strictEqual(trip['방문수'], 2);
+  assert.match(trip['경유지2'], /^\[매입\] 예시-귀사길매입 ✓/);
+});
+
+test('운행 중 매입 추가: 넣을 회차가 없으면 매입 전용 새 회차와 새 링크', () => {
+  const { g, vctx, alerts } = setup();
+  vctx.menuSample();
+  vctx.menuPlan();
+  // 1톤만 실을 수 있는 짧은 매입을, 모든 회차가 끝난 상황에서 추가
+  vctx.ensureOptionalColumns_();
+  table(vctx, '회차').forEach((t) => vctx.updateRow_(g.ss.getSheetByName('회차'), t._row, { '상태': '완료' }));
+  g.ss.getSheetByName('거래처').appendRow(['예시-늦은매입', '(예시)', 36.52, 127.52, 20]);
+  const today = g.ss.getSheetByName('오늘배송');
+  const H = today.data[0];
+  const r = today.getLastRow() + 1;
+  today.set(r, 1, '2026-11-16'); today.set(r, 2, '예시-늦은매입'); today.set(r, 3, 300); today.set(r, 4, 1500);
+  today.set(r, H.indexOf('구분') + 1, '매입');
+  vctx.menuAddPickupsLive();
+  assert.match(alerts.at(-1), /매입 전용, 새 회차/);
+  assert.match(alerts.at(-1), /새 링크/);
+  const added = table(vctx, '오늘배송').find((x) => x['거래처명'] === '예시-늦은매입');
+  const t = table(vctx, '회차').find((x) => x['차량ID'] === added['배정차량ID'] && x['회차'] === added['회차']);
+  assert.match(t['링크'], /exec\?d=2026-11-16/);
+  const logs = table(vctx, '운행일지').filter((x) => x['차량ID'] === added['배정차량ID'] && x['회차'] === added['회차']);
+  assert.deepStrictEqual(logs.map((x) => x['거래처명']), ['예시-늦은매입', '회사 복귀']);
 });

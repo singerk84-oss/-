@@ -8,6 +8,7 @@ function onOpen() {
     .addItem('② 주소 → 좌표 변환', 'menuGeocode')
     .addItem('③ 배차·경로 계산', 'menuPlan')
     .addItem('④ 회차 링크 전송', 'menuSend')
+    .addItem('⑤ 운행 중 매입 추가', 'menuAddPickupsLive')
     .addSeparator()
     .addItem('회차 경유지 새로고침', 'menuSyncWaypoints')
     .addItem('링크 다시 만들기', 'menuLinks')
@@ -84,6 +85,7 @@ function planDay(date) {
 }
 
 function planDayLocked_(date) {
+  ensureOptionalColumns_();
   try {
     pruneLegCache_(date);
   } catch (e) {
@@ -157,9 +159,11 @@ function planDayLocked_(date) {
       stayMin: c.stayMin,
       manual: toBool(r['수동지정']),
       vehicleId: String(r['배정차량ID'] || '').trim(),
-      trip: toNumber(r['회차'], '')
+      trip: toNumber(r['회차'], ''),
+      kind: isPickupRow_(r) ? 'pickup' : 'delivery',
+      priority: toBool(r['우선'])
     });
-    rowMap.push({ row: r._row, name: name });
+    rowMap.push({ row: r._row, name: name, kind: isPickupRow_(r) ? KIND_PICKUP : KIND_DELIVERY });
   });
 
   // 차량별 행렬(화물차는 차량마다 지날 수 있는 길이 다르다)
@@ -185,7 +189,7 @@ function planDayLocked_(date) {
       '배정차량ID': p.vehicleId,
       '회차': p.trip,
       '방문순서': p.seq,
-      '예상도착시각': p.etaMin === null ? '' : formatMinutes(p.etaMin),
+      '예상도착시각': p.etaMin === null ? '' : timeCell(formatMinutes(p.etaMin)),
       '경고': p.warnings.join(' / ')
     } : { '배정차량ID': '', '회차': '', '방문순서': '', '예상도착시각': '', '경고': preWarn[r._row] || '' };
     updateRow_(todaySh, r._row, patch);
@@ -197,7 +201,8 @@ function planDayLocked_(date) {
   clearDayRows_(SHEET.LOG, date);
 
   var nameOfRow = {};
-  rowMap.forEach(function (x) { nameOfRow[x.row] = x.name; });
+  var kindOfRow = {};
+  rowMap.forEach(function (x) { nameOfRow[x.row] = x.name; kindOfRow[x.row] = x.kind; });
   var pointOfRow = {};
   deliveries.forEach(function (d) { pointOfRow[d.id] = d.point; });
 
@@ -210,7 +215,7 @@ function planDayLocked_(date) {
     var total = 0;
     t.order.forEach(function (rowId) {
       var p = pointOfRow[rowId];
-      legs.push({ name: nameOfRow[rowId], distKm: m.dist[prev][p] });
+      legs.push({ name: nameOfRow[rowId], distKm: m.dist[prev][p], kind: kindOfRow[rowId] });
       total += m.dist[prev][p];
       prev = p;
     });
@@ -219,7 +224,7 @@ function planDayLocked_(date) {
     legsByTrip.push({ vehicleId: t.vehicleId, trip: t.trip, legs: legs, returnDistKm: back });
     appendRow_(tripsSh, {
       '일자': date, '차량ID': t.vehicleId, '회차': t.trip,
-      '출발예정': formatMinutes(t.departMin), '복귀예정': formatMinutes(t.returnMin),
+      '출발예정': timeCell(formatMinutes(t.departMin)), '복귀예정': timeCell(formatMinutes(t.returnMin)),
       '방문수': t.order.length, '총거리(km)': round1_(total), '총소요(분)': Math.round(t.totalMin),
       '상태': t.warnings.length ? '경고' : '계획'
     });
@@ -288,4 +293,9 @@ function menuSample() {
     });
   }
   alert_('예시 데이터를 넣었습니다. 스크립트 속성 ROUTE_PROVIDER=estimate 로 두고 [③ 배차·경로 계산]을 실행하세요.');
+}
+
+/** 오늘배송 행이 매입인지(구분 칸이 '매입') */
+function isPickupRow_(r) {
+  return String(r['구분'] || '').trim() === KIND_PICKUP;
 }

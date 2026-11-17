@@ -64,12 +64,7 @@ function getTripState(p) {
   var s = readSettings_();
   var customers = {};
   readTable_(SHEET.CUSTOMERS).forEach(function (c) { customers[String(c['거래처명']).trim()] = c; });
-  var eta = {};
-  readTable_(SHEET.TODAY).forEach(function (r) {
-    if (dateKey_(r['일자']) === p.d && String(r['배정차량ID']) === p.v && String(r['회차']) === String(p.t)) {
-      eta[String(r['거래처명']).trim()] = timeText_(r['예상도착시각']);
-    }
-  });
+  var plan = tripTodayRows_(p.d, p.v, p.t);
   var vehicle = readTable_(SHEET.VEHICLES).filter(function (v) { return String(v['차량ID']) === p.v; })[0] || {};
 
   var current = -1;
@@ -81,12 +76,16 @@ function getTripState(p) {
     var lng = isReturn ? s.companyLng : c['경도'];
     var done = r['완료시각'] !== '';
     if (!done && current < 0) current = i;
+    var pr = isReturn ? {} : (plan[i] || {});
+    var isPickup = !isReturn && String(r['구분']).trim() === KIND_PICKUP;
     return {
       index: i,
       name: name,
       isReturn: isReturn,
+      isPickup: isPickup,
+      isPriority: !isPickup && toBool(pr['우선']),
       address: isReturn ? s.companyAddress : (c['주소'] || ''),
-      eta: eta[name] || '',
+      eta: timeText_(pr['예상도착시각']),
       depart: timeText_(r['출발시각']),
       arrive: timeText_(r['도착시각']),
       complete: timeText_(r['완료시각']),
@@ -155,7 +154,7 @@ function tapStop(p, index, action) {
 
     var row = rows[current];
     var sh = getSheet_(SHEET.LOG);
-    var now = nowTime_();
+    var now = timeCell(nowTime_());
     if (action === 'start') {
       if (row['출발시각'] === '') updateRow_(sh, row._row, { '출발시각': now });
       if (current === 0) setTripStatus_(p.d, p.v, p.t, '운행중');

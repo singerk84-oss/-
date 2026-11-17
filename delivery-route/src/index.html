@@ -36,6 +36,11 @@
     .btn-sub { background: var(--line); color: var(--ink); }
     .btns { display: grid; grid-template-columns: 1fr 2fr; gap: 8px; margin-top: 12px; }
     .navlink { display: block; text-align: center; margin-top: 8px; font-size: 14px; color: var(--ink); }
+    .badge { display: inline-block; font-size: 12px; font-weight: 700; border-radius: 6px; padding: 2px 6px; margin-right: 6px;
+      vertical-align: 2px; }
+    .badge.pickup { background: #dbeafe; color: #1e40af; }
+    .badge.priority { background: #fee2e2; color: #991b1b; }
+    .notice { background: #1e40af; color: #fff; padding: 12px 16px; font-size: 15px; display: none; }
     .navhint { text-align: center; margin-top: 4px; font-size: 12px; color: var(--muted); }
     .panel { background: var(--card); border-radius: 14px; padding: 18px; border: 1px solid var(--line); margin-top: 16px; }
     .panel h2 { margin: 0 0 8px; font-size: 18px; }
@@ -54,6 +59,7 @@
     <div class="title" id="title">불러오는 중…</div>
     <div class="sub" id="sub"></div>
   </header>
+  <div class="notice" id="notice"></div>
   <main id="app"><p class="muted">회차 정보를 불러오는 중입니다.</p></main>
   <div class="toast" id="toast"></div>
 
@@ -99,7 +105,7 @@
   function arrive(i) { call('tapStop', [i, 'arrive']); }
   function complete(i) {
     var s = state.stops[i];
-    var msg = s.isReturn ? '회사에 복귀했습니까?' : s.name + ' 하차를 완료했습니까?';
+    var msg = s.isReturn ? '회사에 복귀했습니까?' : s.name + (s.isPickup ? ' 상차(매입)를' : ' 하차를') + ' 완료했습니까?';
     if (confirm(msg)) call('tapStop', [i, 'complete']);
   }
   function closeDay() {
@@ -113,7 +119,8 @@
     var cls = s.complete ? 'done' : (cur ? 'current' : 'locked');
     var label = s.isReturn ? '🏁' : (s.index + 1);
     var h = '<div class="stop ' + cls + '"><div class="row"><div class="no">' + label + '</div><div>' +
-      '<div class="name">' + esc(s.name) + '</div>' +
+      '<div class="name">' + (s.isPickup ? '<span class="badge pickup">매입</span>' : '') +
+      (s.isPriority ? '<span class="badge priority">★우선</span>' : '') + esc(s.name) + '</div>' +
       (s.address ? '<div class="addr">' + esc(s.address) + '</div>' : '') + '</div></div>';
     var meta = [];
     if (s.eta && !s.isReturn) meta.push('예상도착 <b>' + esc(s.eta) + '</b>');
@@ -133,7 +140,7 @@
           (s.arrive ? '<button class="btn-sub" disabled>도착함</button>'
             : '<button class="btn-sub"' + dis + ' onclick="arrive(' + s.index + ')">도착</button>') +
           '<button class="btn-ok"' + dis + ' onclick="complete(' + s.index + ')">' +
-          (s.isReturn ? '복귀 완료' : '완료') + '</button></div>';
+          (s.isReturn ? '복귀 완료' : (s.isPickup ? '상차 완료' : '완료')) + '</button></div>';
         if (s.nav) {
           h += '<a class="navlink" href="' + esc(s.nav.main) + '" target="_top">' + esc(s.nav.mainLabel) + ' 길안내 다시 열기</a>';
           h += '<div class="navhint">TMAP이 열리지 않으면 앱 설치 여부를 확인하세요.</div>';
@@ -172,6 +179,38 @@
     var odo2 = document.getElementById('odo');
     if (odo2) odo2.value = odoVal;
   }
+
+  // 운행 중 경유지가 추가될 수 있으므로 자동으로 다시 읽는다:
+  // TMAP에서 돌아와 화면이 다시 보일 때, 그리고 화면을 켜 둔 동안 1분마다
+  function signature(s) {
+    return s.stops.map(function (x) { return (x.isPickup ? 'P' : 'D') + x.name; }).join('|');
+  }
+  function showNotice(msg) {
+    var n = document.getElementById('notice');
+    n.textContent = msg;
+    n.style.display = 'block';
+    setTimeout(function () { n.style.display = 'none'; }, 8000);
+  }
+  function refresh() {
+    if (busy || !state) return;
+    google.script.run
+      .withSuccessHandler(function (s) {
+        if (busy) return;
+        var before = signature(state);
+        var added = s.stops.length - state.stops.length;
+        state = s;
+        render();
+        if (signature(s) !== before) {
+          showNotice(added > 0 ? '경유지 ' + added + '곳이 추가되었습니다. 순서를 확인하세요.' : '경유지가 변경되었습니다. 순서를 확인하세요.');
+        }
+      })
+      .withFailureHandler(function () { /* 통신 실패는 다음 갱신 때 다시 시도 */ })
+      .getTripState(P);
+  }
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'visible') refresh();
+  });
+  setInterval(function () { if (document.visibilityState === 'visible') refresh(); }, 60000);
 
   google.script.run
     .withSuccessHandler(function (s) { state = s; render(); })

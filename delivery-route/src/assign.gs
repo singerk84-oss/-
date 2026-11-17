@@ -16,8 +16,10 @@
 
 /**
  * @param {Object} input
- *   deliveries: [{id, point, weight, length, stayMin, manual, vehicleId, trip}]
+ *   deliveries: [{id, point, weight, length, stayMin, manual, vehicleId, trip, kind, priority}]
  *               point = 시간행렬 인덱스(0은 회사)
+ *               kind = 'delivery'(배송, 기본) | 'pickup'(매입: 경유 중 싣고 회사로 가져옴)
+ *               priority = 우선 배송(차량 1회차에 넣고, 회차 안에서 먼저 방문)
  *   vehicles:   [{id, maxWeight, bedLength}]
  *   time:       이동시간 행렬(분) — 모든 차량 공통
  *   timeByVehicle: {차량ID: 행렬} — 차량별 행렬(화물차 제한 반영). 있으면 time보다 우선
@@ -100,7 +102,18 @@ function planDeliveries(input) {
     }
     var idx = [];
     for (var j = 1; j <= k; j++) idx.push(j);
-    var r = optimizeRoute(idx, sub);
+    // 짐칸 조건: 배송 화물을 모두 싣고 출발, 배송지에서 내리고 매입처에서 싣는다
+    var delta = {};
+    var priority = {};
+    var initialLoad = 0;
+    members.forEach(function (m, x) {
+      if (isPickup(m)) delta[x + 1] = D[m].weight;
+      else { delta[x + 1] = -D[m].weight; initialLoad += D[m].weight; }
+      if (isPriority(m)) priority[x + 1] = true;
+    });
+    var r = optimizeRoute(idx, sub, {
+      cap: vehById[vid].maxWeight, initialLoad: initialLoad, delta: delta, priority: priority
+    });
     var stay = members.reduce(function (s, m) { return s + D[m].stayMin; }, 0);
     var res = {
       order: r.order.map(function (j) { return members[j - 1]; }),
@@ -111,21 +124,44 @@ function planDeliveries(input) {
     return res;
   }
 
+  function isPickup(m) { return D[m].kind === 'pickup'; }
+  function isPriority(m) { return !!D[m].priority && !isPickup(m); }
+
+  /** {deliver: 배송 합계, pickup: 매입 합계} */
   function weightOf(members) {
-    return members.reduce(function (s, m) { return s + D[m].weight; }, 0);
+    var w = { deliver: 0, pickup: 0 };
+    members.forEach(function (m) {
+      if (isPickup(m)) w.pickup += D[m].weight; else w.deliver += D[m].weight;
+    });
+    return w;
+  }
+
+  /**
+   * 배송 합계와 매입 합계가 각각 최대적재중량 이하이면 회차가 성립한다
+   * ('배송을 모두 끝낸 뒤 매입' 순서는 항상 가능하므로). 실제 순서는 routeOf가
+   * 경유지마다 짐칸 무게를 따져 더 빠른 순서(중간 매입 포함)를 고른다.
+   */
+  function weightOk(members, vid) {
+    var w = weightOf(members);
+    var cap = vehById[vid].maxWeight;
+    return w.deliver <= cap && w.pickup <= cap;
   }
 
   function canJoin(trip, i) {
     if (trip.locked) return false;
     if (cand[i].indexOf(trip.vehicleId) < 0) return false;
-    return weightOf(trip.members) + D[i].weight <= vehById[trip.vehicleId].maxWeight;
+    return weightOk(trip.members.concat([i]), trip.vehicleId);
   }
 
   function tripFeasibleOn(members, vid) {
     for (var x = 0; x < members.length; x++) {
       if (cand[members[x]].indexOf(vid) < 0) return false;
     }
-    return weightOf(members) <= vehById[vid].maxWeight;
+    return weightOk(members, vid);
+  }
+
+  function hasPriority(t) {
+    return t.members.some(isPriority);
   }
 
   function cost(ts) {
@@ -144,7 +180,25 @@ function planDeliveries(input) {
       over += Math.max(0, finish - input.dayEnd);
       latest = Math.max(latest, finish);
     });
-    return over * 10000 + total + 0.1 * latest;
+    // 우선 배송은 차량 1회차에만: 우선 건이 든 회차가 차량당 2개 이상이거나,
+    // 수동지정 1회차가 따로 있는데 자동 회차에 우선 건이 있으면 위반
+    var priViolation = 0;
+    var priTrips = {};
+    var locked1 = {};
+    ts.forEach(function (t) {
+      if (!t.members.length) return;
+      if (t.locked && t.number === 1) locked1[t.vehicleId] = t;
+      if (hasPriority(t)) (priTrips[t.vehicleId] = priTrips[t.vehicleId] || []).push(t);
+    });
+    Object.keys(priTrips).forEach(function (vid) {
+      var list = priTrips[vid];
+      var ok = locked1[vid] ? list.filter(function (t) { return t === locked1[vid]; }).length : Math.min(list.length, 1);
+      list.forEach(function (t) {
+        if (ok > 0 && (!locked1[vid] || t === locked1[vid])) { ok--; return; }
+        priViolation += t.members.filter(isPriority).length;
+      });
+    });
+    return over * 10000 + priViolation * 5000 + total + 0.1 * latest;
   }
 
   function clone(ts) {
@@ -265,8 +319,11 @@ function planDeliveries(input) {
     var used = {};
     mine.forEach(function (t) { if (t.locked) used[t.number] = true; });
     var autos = mine.filter(function (t) { return !t.locked; });
-    // 결과가 매번 같도록 회차 안 최소 행 번호 기준으로 정렬
-    autos.sort(function (p, q) { return Math.min.apply(null, p.members) - Math.min.apply(null, q.members); });
+    // 우선 배송이 든 회차를 앞에, 나머지는 결과가 매번 같도록 회차 안 최소 행 번호 기준으로 정렬
+    autos.sort(function (p, q) {
+      return (hasPriority(q) - hasPriority(p)) ||
+        (Math.min.apply(null, p.members) - Math.min.apply(null, q.members));
+    });
     var next = 1;
     autos.forEach(function (t) {
       while (used[next]) next++;
@@ -298,11 +355,16 @@ function planDeliveries(input) {
       if (ret > input.dayEnd) {
         tripWarn.push('복귀 예정 ' + formatMinutes(ret) + '(운행종료 ' + formatMinutes(input.dayEnd) + ' 초과) — 차량 추가 필요');
       }
-      if (t.locked && wsum > v.maxWeight) {
-        tripWarn.push('수동지정 회차 중량 합계 초과(' + wsum + 'kg > ' + v.maxWeight + 'kg)');
+      if (t.locked && wsum.deliver > v.maxWeight) {
+        tripWarn.push('수동지정 회차 배송 중량 합계 초과(' + wsum.deliver + 'kg > ' + v.maxWeight + 'kg)');
+      }
+      if (t.locked && wsum.pickup > v.maxWeight) {
+        tripWarn.push('수동지정 회차 매입 중량 합계 초과(' + wsum.pickup + 'kg > ' + v.maxWeight + 'kg)');
       }
       t.members.forEach(function (m) {
-        rows[m].warnings = rowWarn[m].concat(tripWarn);
+        var w = rowWarn[m].concat(tripWarn);
+        if (isPriority(m) && t.number !== 1) w.push('우선 배송을 1회차에 넣지 못함(' + t.number + '회차)');
+        rows[m].warnings = w;
       });
       outTrips.push({
         vehicleId: v.id,
@@ -313,7 +375,8 @@ function planDeliveries(input) {
         returnMin: ret,
         travelMin: r.travelMin,
         totalMin: ret - loadStart,
-        weight: wsum,
+        weight: wsum.deliver,
+        pickupWeight: wsum.pickup,
         locked: !!t.locked,
         warnings: tripWarn
       });
@@ -332,4 +395,98 @@ function planDeliveries(input) {
   if (unassigned) globalWarn.push('배정 불가 배송 ' + unassigned + '건');
 
   return { rows: rows, trips: outTrips, warnings: globalWarn };
+}
+
+/**
+ * 운행 중 매입 추가: 이미 확정된 회차에 매입 1건을 끼워 넣을 가장 좋은 자리를 찾는다(순수 함수).
+ *
+ * 규칙
+ *  - 완료된 회차는 제외. 이미 지난(완료·출발한) 경유지 앞에는 넣지 않는다.
+ *    단, 회사로 복귀 중(복귀 출발)인 회차는 복귀 직전에 넣을 수 있다(귀사길 매입).
+ *  - 경유지마다 짐칸 무게가 최대적재중량을 넘지 않아야 한다.
+ *  - 넣은 뒤 그 차량의 하루 마지막 복귀가 운행종료 이내여야 한다(뒤 회차도 그만큼 밀린다).
+ *  - 기존 경유지 순서는 바꾸지 않는다(기사가 보던 순서 유지). 추가 시간이 가장 적은 자리를 고른다.
+ *  - 어디에도 못 넣으면 그 차량 마지막 회차 뒤에 매입 전용 회차를 만드는 안을 검토한다.
+ *
+ * @param {Object} input
+ *   item:     {point, weight, length, stayMin}
+ *   vehicles: [{id, maxWeight, bedLength}]
+ *   legTime(vehicleId, fromPoint, toPoint) → 분(진입 불가면 Infinity). 지점 0은 회사
+ *   trips:    [{vehicleId, trip, done,
+ *               stops:[{point, kind, weight, stayMin, done, departed}]}]  (회사 복귀 제외, 방문 순서)
+ *   lastReturnByVehicle: {차량ID: 그날 마지막 복귀 예정(분)} — 회차가 없는 차량은 생략
+ *   dayStart, dayEnd, loadingMin
+ *   nowMin(선택): 현재 시각(분). 새 회차는 이 시각과 마지막 복귀 중 늦은 때부터 상차한다
+ * @return {Object|null} {type:'insert', vehicleId, trip, position, deltaMin}
+ *                       | {type:'new', vehicleId, trip, departMin, returnMin, deltaMin} | {type:'none', reason}
+ */
+function planPickupInsertion(input) {
+  var it = input.item;
+  var best = null;
+  var reasons = { length: true, weight: true, time: false, load: false, route: false };
+
+  input.vehicles.forEach(function (v) {
+    if (it.length > v.bedLength) return;
+    reasons.length = false;
+    if (it.weight > v.maxWeight) return;
+    reasons.weight = false;
+    var lt = function (a, b) { return a === b ? 0 : input.legTime(v.id, a, b); };
+    var lastReturn = input.lastReturnByVehicle[v.id];
+    if (lastReturn === undefined) lastReturn = input.dayStart;
+
+    input.trips.forEach(function (t) {
+      if (t.vehicleId !== v.id || t.done) return;
+      var S = t.stops;
+      // 넣을 수 있는 첫 자리: 아직 출발하지 않은 첫 경유지 앞
+      var minPos = 0;
+      for (var k = 0; k < S.length; k++) {
+        if (S[k].done || S[k].departed) minPos = k + 1;
+      }
+      if (minPos > S.length) minPos = S.length;
+      // 회사 복귀 중이면 복귀 직전(=마지막 자리)만 가능, 그 외에는 minPos..S.length
+      for (var pos = minPos; pos <= S.length; pos++) {
+        // 짐칸 무게 검사
+        var load = 0;
+        S.forEach(function (s) { if (s.kind !== 'pickup') load += s.weight; });
+        var ok = load <= v.maxWeight;
+        for (var q = 0; q <= S.length && ok; q++) {
+          if (q === pos) { load += it.weight; if (load > v.maxWeight) ok = false; }
+          if (q < S.length && ok) {
+            load += S[q].kind === 'pickup' ? S[q].weight : -S[q].weight;
+            if (load > v.maxWeight) ok = false;
+          }
+        }
+        if (!ok) { reasons.load = true; continue; }
+        var prev = pos === 0 ? 0 : S[pos - 1].point;
+        var next = pos < S.length ? S[pos].point : 0;
+        var delta = lt(prev, it.point) + it.stayMin + lt(it.point, next) - lt(prev, next);
+        if (!isFinite(delta)) { reasons.route = true; continue; }
+        if (lastReturn + delta > input.dayEnd) { reasons.time = true; continue; }
+        if (!best || delta < best.deltaMin - 1e-9) {
+          best = { type: 'insert', vehicleId: v.id, trip: t.trip, position: pos, deltaMin: delta };
+        }
+      }
+    });
+
+    // 매입 전용 새 회차(마지막 회차 뒤, 지금보다 이르지 않게)
+    var depart = Math.max(lastReturn, input.nowMin || 0) + input.loadingMin;
+    var round = lt(0, it.point) + it.stayMin + lt(it.point, 0);
+    if (!isFinite(round)) { reasons.route = true; return; }
+    var ret = depart + round;
+    if (ret > input.dayEnd) { reasons.time = true; return; }
+    var maxTrip = 0;
+    input.trips.forEach(function (t) { if (t.vehicleId === v.id) maxTrip = Math.max(maxTrip, Number(t.trip)); });
+    var d2 = input.loadingMin + round;
+    if (!best || d2 < best.deltaMin - 1e-9) {
+      best = { type: 'new', vehicleId: v.id, trip: maxTrip + 1, departMin: depart, returnMin: ret, deltaMin: d2 };
+    }
+  });
+
+  if (best) return best;
+  var reason = reasons.length ? '적재함 길이 초과'
+    : reasons.weight ? '최대적재중량 초과'
+      : reasons.route ? '진입할 경로 없음'
+        : reasons.time ? '운행종료 전 복귀 불가 — 차량 추가 필요'
+          : reasons.load ? '짐칸 여유 없음' : '추가할 수 있는 회차 없음';
+  return { type: 'none', reason: reason };
 }

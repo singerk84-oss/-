@@ -27,6 +27,14 @@ function formatMinutes(min) {
   return (h < 10 ? '0' : '') + h + ':' + (m < 10 ? '0' : '') + m;
 }
 
+/**
+ * 시트에 쓸 시각 값. 앞에 '를 붙여 글자로 저장한다.
+ * (시트가 시각 값으로 바꾸면 Apps Script에서 1899년 기준 날짜로 읽혀 몇 분씩 어긋날 수 있다)
+ */
+function timeCell(text) {
+  return text === '' || text === null || text === undefined ? '' : "'" + text;
+}
+
 /** 두 좌표 사이 직선거리(km) — 하버사인 공식 */
 function haversineKm(lat1, lng1, lat2, lng2) {
   var R = 6371;

@@ -21,18 +21,36 @@ function clearDayRows_(name, date) {
 
 /**
  * 회차별 운행일지 행 생성
- * @param {Object[]} legsByTrip [{vehicleId, trip, legs:[{name, distKm}], returnDistKm}]
+ * @param {Object[]} legsByTrip [{vehicleId, trip, legs:[{name, distKm, kind}], returnDistKm}]
  */
 function createLogRows_(date, legsByTrip) {
   var sh = getSheet_(SHEET.LOG);
-  var out = [];
+  var objs = [];
   legsByTrip.forEach(function (t) {
     t.legs.forEach(function (leg) {
-      out.push([date, t.vehicleId, t.trip, leg.name, '', '', '', round1_(leg.distKm)]);
+      objs.push(logRowObj_(date, t.vehicleId, t.trip, leg.name, leg.distKm, leg.kind));
     });
-    out.push([date, t.vehicleId, t.trip, RETURN_LABEL, '', '', '', round1_(t.returnDistKm)]);
+    objs.push(logRowObj_(date, t.vehicleId, t.trip, RETURN_LABEL, t.returnDistKm, ''));
   });
-  if (out.length) sh.getRange(sh.getLastRow() + 1, 1, out.length, out[0].length).setValues(out);
+  if (!objs.length) return;
+  var values = objs.map(function (o) { return rowFromObj_(sh, o); });
+  sh.getRange(sh.getLastRow() + 1, 1, values.length, values[0].length).setValues(values);
+}
+
+function logRowObj_(date, vehicleId, trip, name, distKm, kind) {
+  return {
+    '일자': date, '차량ID': vehicleId, '회차': trip, '거래처명': name,
+    '구간거리(API,km)': round1_(distKm), '구분': kind || ''
+  };
+}
+
+/** 헤더 순서에 맞춘 행 배열 */
+function rowFromObj_(sh, obj) {
+  var idx = headerIndex_(sh);
+  var row = [];
+  for (var c = 0; c < sh.getLastColumn(); c++) row.push('');
+  Object.keys(obj).forEach(function (h) { if (idx[h]) row[idx[h] - 1] = obj[h]; });
+  return row;
 }
 
 function round1_(x) {
@@ -98,6 +116,21 @@ function closeDay_(date, vehicleId, odometerKm) {
   return { odometer: odo, real: real, api: api, diff: diff, prev: prev };
 }
 
+/**
+ * 회차의 오늘배송 행(방문순서대로). 운행일지의 경유지 행(회사 복귀 제외)과 순서가 1:1로 대응한다.
+ */
+function tripTodayRows_(date, vehicleId, trip, allToday) {
+  return (allToday || readTable_(SHEET.TODAY)).filter(function (r) {
+    return dateKey_(r['일자']) === date && String(r['배정차량ID']) === String(vehicleId) &&
+      String(r['회차']) === String(trip);
+  }).sort(function (a, b) { return Number(a['방문순서']) - Number(b['방문순서']); });
+}
+
+/** 경유지 이름 앞 표시: 매입은 [매입], 우선 배송은 ★ */
+function stopLabel_(name, isPickup, isPriority) {
+  return (isPickup ? '[매입] ' : (isPriority ? '★' : '')) + name;
+}
+
 /* ---------------- 회차 탭 경유지 표시 ---------------- */
 
 var WAYPOINT_PREFIX = '경유지';
@@ -135,11 +168,7 @@ function syncTripWaypoints_(date, vehicleId, trip) {
 
   var logs = readTable_(SHEET.LOG).filter(function (r) { return dateKey_(r['일자']) === date; })
     .sort(function (a, b) { return a._row - b._row; });
-  var eta = {};
-  readTable_(SHEET.TODAY).forEach(function (r) {
-    if (dateKey_(r['일자']) !== date) return;
-    eta[r['배정차량ID'] + '#' + r['회차'] + '#' + String(r['거래처명']).trim()] = timeText_(r['예상도착시각']);
-  });
+  var allToday = readTable_(SHEET.TODAY);
 
   var stopsOf = {};
   var maxStops = 0;
@@ -158,6 +187,7 @@ function syncTripWaypoints_(date, vehicleId, trip) {
   trips.forEach(function (t) {
     var key = t['차량ID'] + '#' + t['회차'];
     var stops = stopsOf[key];
+    var plan = tripTodayRows_(date, t['차량ID'], t['회차'], allToday);
     var width = lastCol - firstWp + 1;
     var text = [[]];
     var bg = [[]];
@@ -165,9 +195,10 @@ function syncTripWaypoints_(date, vehicleId, trip) {
     for (var c = 0; c < width; c++) {
       var s = stops[c];
       if (!s) { text[0].push(''); bg[0].push(null); fg[0].push(null); continue; }
-      var name = String(s['거래처명']).trim();
+      var pr = plan[c] || {};
+      var name = stopLabel_(String(s['거래처명']).trim(), String(s['구분']).trim() === KIND_PICKUP, toBool(pr['우선']));
       var done = s['완료시각'] !== '';
-      var e = eta[key + '#' + name];
+      var e = timeText_(pr['예상도착시각']);
       text[0].push(done ? name + ' ✓' + timeText_(s['완료시각']) : name + (e ? ' (예정 ' + e + ')' : ''));
       bg[0].push(done ? COLOR_DONE_BG : null);
       fg[0].push(done ? COLOR_DONE_FG : null);

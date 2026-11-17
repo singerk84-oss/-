@@ -153,23 +153,39 @@ function checkTemplate_() {
       problems.push(pair[0] + ' 시트를 새로 만들었습니다');
       return;
     }
+    var added = ensureOptionalColumnsOf_(sh);
+    if (added.length) problems.push(pair[0] + ' 시트에 컬럼 추가: ' + added.join(', '));
     var idx = headerIndex_(sh);
-    var optional = OPTIONAL_HEADERS[pair[0]] || [];
-    var added = optional.filter(function (h) { return !idx[h]; });
-    if (added.length) {
-      sh.getRange(1, sh.getLastColumn() + 1, 1, added.length).setValues([added]).setFontWeight('bold');
-      problems.push(pair[0] + ' 시트에 컬럼 추가: ' + added.join(', '));
-      idx = headerIndex_(sh);
-    }
     var missing = pair[1].filter(function (h) { return !idx[h]; });
     if (missing.length) problems.push(pair[0] + ' 시트 컬럼 누락: ' + missing.join(', '));
   });
   getSheet_(SHEET.TRIPS, HEADERS.TRIPS);
   getSheet_(SHEET.LEG_CACHE, HEADERS.LEG_CACHE);
   getSheet_(SHEET.ERROR_LOG, HEADERS.ERROR_LOG);
-  // 수동지정 칸을 체크박스로
+  // 수동지정·우선 칸을 체크박스로
   var today = ss.getSheetByName(SHEET.TODAY);
-  var col = headerIndex_(today)['수동지정'];
-  if (col) today.getRange(2, col, Math.max(today.getMaxRows() - 1, 1), 1).insertCheckboxes();
+  ['수동지정', '우선'].forEach(function (h) {
+    var col = headerIndex_(today)[h];
+    if (col) today.getRange(2, col, Math.max(today.getMaxRows() - 1, 1), 1).insertCheckboxes();
+  });
   return problems;
+}
+
+/** 한 시트에 빠진 추가 컬럼을 오른쪽에 붙인다 → 추가한 헤더 목록 */
+function ensureOptionalColumnsOf_(sh) {
+  var idx = headerIndex_(sh);
+  var added = (OPTIONAL_HEADERS[sh.getName()] || []).filter(function (h) { return !idx[h]; });
+  if (added.length) {
+    sh.getRange(1, sh.getLastColumn() + 1, 1, added.length).setValues([added]).setFontWeight('bold');
+  }
+  return added;
+}
+
+/** 추가 컬럼이 필요한 시트를 모두 점검(배차 계산·운행 중 추가 전에 호출) */
+function ensureOptionalColumns_() {
+  var ss = getSpreadsheet_();
+  Object.keys(OPTIONAL_HEADERS).forEach(function (name) {
+    var sh = ss.getSheetByName(name);
+    if (sh) ensureOptionalColumnsOf_(sh);
+  });
 }

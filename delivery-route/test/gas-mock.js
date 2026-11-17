@@ -37,6 +37,7 @@ class Sheet {
   setBg(r, c, v) { this.bg[r + ',' + c] = v; }
   getName() { return this.name; }
   set(r, c, v) {
+    if (typeof v === 'string' && v.startsWith("'")) v = v.slice(1); // 시트처럼 ' 접두는 글자 표시로만 쓰임
     while (this.data.length < r) this.data.push([]);
     this.data[r - 1][c - 1] = v;
   }
@@ -50,6 +51,15 @@ class Sheet {
   getMaxRows() { return Math.max(this.data.length, 100); }
   getRange(r, c, nr = 1, nc = 1) { return new Range(this, r, c, nr, nc); }
   appendRow(row) { const r = this.getLastRow() + 1; row.forEach((v, c) => this.set(r, c + 1, v)); }
+  insertRowBefore(r) {
+    this.data.splice(r - 1, 0, []);
+    const nb = {};
+    for (const [k, v] of Object.entries(this.bg)) {
+      const [rr, cc] = k.split(',').map(Number);
+      nb[(rr >= r ? rr + 1 : rr) + ',' + cc] = v;
+    }
+    this.bg = nb;
+  }
   deleteRow(r) {
     this.data.splice(r - 1, 1);
     const nb = {};
