@@ -46,8 +46,12 @@ function kakaoGet_(url, kind) {
   }, kind);
 }
 
-/** 주소 1건 → {lat, lng} 또는 null. 주소 검색 실패 시 키워드 검색으로 한 번 더 찾는다. */
+/**
+ * 주소 1건 → {lat, lng} 또는 null.
+ * KAKAO_REST_KEY가 있으면 카카오 로컬 API(주소 → 키워드 순), 없으면 Apps Script 기본 구글 지오코더를 쓴다.
+ */
 function geocodeAddress(address) {
+  if (!getProp_('KAKAO_REST_KEY')) return googleGeocode_(address);
   var q = encodeURIComponent(address);
   var r = kakaoGet_(KAKAO_LOCAL_ADDRESS + '?query=' + q, '주소검색');
   var doc = r.documents && r.documents[0];
@@ -102,4 +106,18 @@ function safeGeocode_(addr) {
   } catch (e) {
     return null;
   }
+}
+
+/** 구글 지오코더(Apps Script Maps 서비스, 별도 키 불필요) */
+function googleGeocode_(address) {
+  var r;
+  try {
+    r = Maps.newGeocoder().setRegion('kr').setLanguage('ko').geocode(address);
+  } catch (e) {
+    logError_('주소검색(구글)', address + ': ' + e);
+    throw e;
+  }
+  var hit = r && r.status === 'OK' && r.results && r.results[0];
+  if (!hit) return null;
+  return { lat: hit.geometry.location.lat, lng: hit.geometry.location.lng };
 }

@@ -137,3 +137,18 @@ test('마지막 회차가 아니면 마감 불가, 전송(email 모드)은 회�
   assert.match(g.mails[0].body, /V5 예시|5톤 예시/);
   assert.ok(table(vctx, '회차').every((t) => t['전송시각']));
 });
+
+test('카카오 키가 없으면 구글 지오코더로 회사·거래처 좌표를 채운다', () => {
+  const { g, vctx } = setup();
+  const sh = g.ss.getSheetByName('설정');
+  sh.set(3, 2, ''); sh.set(4, 2, ''); // 회사 좌표 비움
+  g.ss.getSheetByName('거래처').appendRow(['테스트상사', '경기도 시흥시 어딘가 1', '', '', '']);
+  g.ctx.Maps = { newGeocoder: () => ({ setRegion() { return this; }, setLanguage() { return this; },
+    geocode: (a) => ({ status: 'OK', results: [{ geometry: { location: { lat: 37.34, lng: 126.73 } } }] }) }) };
+  const r = vctx.geocodeAll();
+  assert.strictEqual(r.done, 2);
+  assert.strictEqual(sh.data[2][1], 37.34);
+  const c = table(vctx, '거래처')[0];
+  assert.strictEqual(c['위도'], 37.34);
+  assert.strictEqual(c['체류시간(분)'], 30);
+});

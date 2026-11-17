@@ -26,7 +26,7 @@ clasp push
 | 속성 | 필수 | 설명 |
 | --- | --- | --- |
 | `TMAP_APP_KEY` | ○ | SK오픈API TMAP 앱 키(화물차 경로안내) |
-| `KAKAO_REST_KEY` | ○ | 카카오 REST API 키(주소→좌표 변환, 나에게 보내기) |
+| `KAKAO_REST_KEY` | | 카카오 REST API 키(주소→좌표 변환, 나에게 보내기). 없으면 좌표 변환은 구글 지오코더 사용 |
 | `ROUTE_PROVIDER` | | `tmap`(기본, 화물차) / `kakao`(승용차 기준) / `estimate`(API 없이 추정, 시험용) |
 | `NAV_APP` | | 기사 길안내 앱 `tmap`(기본) / `kakaomap` |
 | `NOTIFY_MODE` | | `email`(기본) / `kakao_memo` / `alimtalk`(2단계, 미구현) |
