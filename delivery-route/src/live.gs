@@ -9,8 +9,32 @@
  */
 
 function menuAddPickupsLive() {
-  var r = addPickupsLive(todayKey_());
-  alert_(r.lines.length ? r.lines.join('\n') : '추가할 매입 행이 없습니다.\n오늘배송 탭에 구분=매입, 배정차량ID가 빈 행을 넣고 다시 실행하세요.');
+  var date = todayKey_();
+  var r = addPickupsLive(date);
+  alert_(r.lines.length ? r.lines.join('\n') : '추가할 매입 행이 없습니다.\n\n' + pickupDiagnosis_(date) +
+    '\n\n오늘배송 탭에 일자=오늘, 구분=매입, 배정차량ID가 빈 행을 넣고 다시 실행하세요.' +
+    '\n(셀을 입력 중인 상태에서 메뉴를 누르면 값이 저장되기 전이라 인식되지 않습니다. Enter로 입력을 마친 뒤 실행하세요.)');
+}
+
+/** 추가할 행을 못 찾았을 때 무엇을 보았는지 알려 준다 */
+function pickupDiagnosis_(date) {
+  var rows = readTable_(SHEET.TODAY);
+  var today = rows.filter(function (r) { return dateKey_(r['일자']) === date; });
+  var pick = today.filter(isPickupRow_);
+  var assigned = pick.filter(function (r) { return String(r['배정차량ID'] || '').trim() !== ''; });
+  var lines = ['확인 결과(기준 일자 ' + date + ')',
+    '- 오늘배송 전체 ' + rows.length + '행, 그중 오늘 일자 ' + today.length + '행',
+    '- 구분=매입 ' + pick.length + '행(이미 배정됨 ' + assigned.length + '행)'];
+  var odd = rows.filter(function (r) { return dateKey_(r['일자']) !== date && isPickupRow_(r); });
+  if (odd.length) {
+    lines.push('- 일자가 오늘이 아닌 매입 행: ' + odd.map(function (r) {
+      return r._row + '행(' + (dateKey_(r['일자']) || '빈 일자') + ')';
+    }).join(', '));
+  }
+  var kinds = {};
+  today.forEach(function (r) { var k = String(r['구분'] === undefined ? '(칸 없음)' : r['구분']).trim() || '(빈칸)'; kinds[k] = (kinds[k] || 0) + 1; });
+  lines.push('- 오늘 행의 구분 값: ' + Object.keys(kinds).map(function (k) { return k + ' ' + kinds[k]; }).join(', '));
+  return lines.join('\n');
 }
 
 /** @return {{lines:string[], results:Object[]}} */
