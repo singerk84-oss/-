@@ -18,7 +18,7 @@
 | matrix.gs | 차량 제원별 구간 행렬(TMAP 화물차/카카오/추정), 같은 날 프로필·좌표쌍 캐시, 진입 불가 = Infinity | |
 | route.gs | 순환 경로 최적화(≤8곳 전수 탐색, 초과 시 최근접 이웃+2-opt) | ○ |
 | assign.gs | 차량 배정·회차 산정(탐욕 삽입 + 지역 탐색) | ○ |
-| links.gs | HMAC 서명 토큰, 회차 링크, TMAP 앱·카카오맵 길안내 링크 | |
+| links.gs | HMAC 서명 토큰, 회차 링크, TMAP 앱 길안내 링크(길안내는 TMAP만 사용) | |
 | notify.gs | 전송(email / kakao_memo / alimtalk 자리) | |
 | webapp.gs | doGet, 출발·도착·완료 처리, 마감 처리 | |
 | log.gs | 운행일지 행 생성, 일일마감 | |

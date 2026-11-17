@@ -50,11 +50,6 @@ function buildTripLink_(date, vehicleId, trip) {
     '&s=' + signTrip_(date, vehicleId, String(trip));
 }
 
-/** 카카오맵 길안내 링크(앱이 있으면 앱에서, 없으면 모바일 웹에서 열림) — 승용차 기준 */
-function kakaoMapLink_(name, lat, lng) {
-  return 'https://map.kakao.com/link/to/' + encodeURIComponent(String(name).replace(/,/g, ' ')) + ',' + lat + ',' + lng;
-}
-
 /**
  * TMAP 앱 길안내 링크. 기사 휴대폰의 TMAP 앱에서 [설정 > 차량 정보]를 화물차로 등록해 두면
  * 실제 주행 안내도 높이·중량 제한을 피한다.
@@ -64,13 +59,9 @@ function tmapLink_(name, lat, lng) {
   return 'tmap://route?goalname=' + encodeURIComponent(name) + '&goalx=' + lng + '&goaly=' + lat;
 }
 
-/** 기사 화면 길안내: {main, alt, mainLabel, altLabel} */
+/** 기사 화면 길안내: TMAP 앱만 사용 */
 function navLinks_(name, lat, lng) {
-  var kakao = kakaoMapLink_(name, lat, lng);
-  if ((getProp_('NAV_APP') || 'tmap') === 'kakaomap') {
-    return { main: kakao, mainLabel: '카카오맵', alt: '', altLabel: '' };
-  }
-  return { main: tmapLink_(name, lat, lng), mainLabel: 'TMAP', alt: kakao, altLabel: '카카오맵' };
+  return { main: tmapLink_(name, lat, lng), mainLabel: 'TMAP' };
 }
 
 /** 회차 시트의 모든 회차(해당 일자)에 링크를 채운다 */

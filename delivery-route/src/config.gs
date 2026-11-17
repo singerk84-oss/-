@@ -12,7 +12,6 @@
  *   TMAP_APP_KEY        : SK오픈API TMAP 앱 키(화물차 경로안내)
  *   ROUTE_PROVIDER      : 'tmap'(기본, 화물차 경로) | 'kakao'(승용차 경로) | 'estimate'(API 없이 직선거리 추정, 시험용)
  *   DISTANCE_MODE       : (이전 설정) 'estimate'이면 ROUTE_PROVIDER=estimate 와 같다
- *   NAV_APP             : 기사 길안내 앱 'tmap'(기본) | 'kakaomap'
  */
 
 var SHEET = {
@@ -91,7 +90,6 @@ function routeProvider_() {
 var SHEET_CONFIG = {
   WEBAPP_URL: '웹앱URL',
   ROUTE_PROVIDER: '경로제공자',
-  NAV_APP: '길안내앱',
   NOTIFY_MODE: '전송방식',
   NOTIFY_EMAIL: '전송이메일',
   LEG_CACHE_KEEP_DAYS: '구간캐시보관일수'

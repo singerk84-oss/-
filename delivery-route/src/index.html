@@ -36,6 +36,7 @@
     .btn-sub { background: var(--line); color: var(--ink); }
     .btns { display: grid; grid-template-columns: 1fr 2fr; gap: 8px; margin-top: 12px; }
     .navlink { display: block; text-align: center; margin-top: 8px; font-size: 14px; color: var(--ink); }
+    .navhint { text-align: center; margin-top: 4px; font-size: 12px; color: var(--muted); }
     .panel { background: var(--card); border-radius: 14px; padding: 18px; border: 1px solid var(--line); margin-top: 16px; }
     .panel h2 { margin: 0 0 8px; font-size: 18px; }
     input { font: inherit; font-size: 20px; width: 100%; padding: 14px; border-radius: 12px; border: 1px solid var(--line);
@@ -84,23 +85,15 @@
     runner[fn].apply(runner, [P].concat(args || []));
   }
 
-  // 업체명 탭: 출발 기록 + 길안내 열기(팝업 차단을 피하려고 탭 순간 바로 연다)
+  // 업체명 탭: 출발 기록이 저장된 뒤 TMAP 앱을 연다(앱으로 넘어가며 페이지를 떠나도 기록은 남는다)
   function go(i) {
     var s = state.stops[i];
     var url = s.nav ? s.nav.main : '';
-    if (/^https?:/.test(url)) {
-      // 새 창은 탭 순간에 열어야 팝업 차단을 피한다
-      window.open(url, '_blank');
-      call('tapStop', [i, 'start']);
-    } else {
-      // 앱 스킴(tmap://)은 페이지를 떠날 수 있으므로 출발 기록이 저장된 뒤에 연다
-      call('tapStop', [i, 'start'], function () { if (url) openNav(url); });
-    }
+    call('tapStop', [i, 'start'], function () { if (url) openTmap(url); });
   }
-  // tmap:// 같은 앱 스킴은 현재 창에서 열어야 앱이 뜬다. https 링크는 새 창으로 연다.
-  function openNav(url) {
-    if (/^https?:/.test(url)) window.open(url, '_blank');
-    else window.top.location.href = url;
+
+  function openTmap(url) {
+    window.top.location.href = url;
   }
 
   function arrive(i) { call('tapStop', [i, 'arrive']); }
@@ -143,7 +136,7 @@
           (s.isReturn ? '복귀 완료' : '완료') + '</button></div>';
         if (s.nav) {
           h += '<a class="navlink" href="' + esc(s.nav.main) + '" target="_top">' + esc(s.nav.mainLabel) + ' 길안내 다시 열기</a>';
-          if (s.nav.alt) h += '<a class="navlink" href="' + esc(s.nav.alt) + '" target="_blank">' + esc(s.nav.altLabel) + '로 열기</a>';
+          h += '<div class="navhint">TMAP이 열리지 않으면 앱 설치 여부를 확인하세요.</div>';
         }
       }
     }

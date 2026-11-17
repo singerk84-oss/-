@@ -79,7 +79,7 @@ test('예시 데이터로 회차 6개·링크 6개, 웹앱 완료 처리, 일일
   assert.strictEqual(st.current, 0);
   assert.strictEqual(st.isLastTrip, true);
   assert.match(st.stops[0].nav.main, /^tmap:\/\/route\?goalname=/);
-  assert.match(st.stops[0].nav.alt, /^https:\/\/map\.kakao\.com\/link\/to\//);
+  assert.strictEqual(st.stops[0].nav.alt, undefined, '카카오맵 보조 링크 없음');
 
   assert.throws(() => vctx.tapStop(p, 0, 'complete'), /출발을 기록/);
   assert.throws(() => vctx.tapStop(p, 1, 'start'), /차례/);
