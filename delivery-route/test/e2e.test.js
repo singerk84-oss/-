@@ -152,3 +152,13 @@ test('카카오 키가 없으면 구글 지오코더로 회사·거래처 좌표
   assert.strictEqual(c['위도'], 37.34);
   assert.strictEqual(c['체류시간(분)'], 30);
 });
+
+test('설정 시트의 경로제공자·웹앱URL 값을 스크립트 속성 대신 쓴다', () => {
+  const { g, vctx } = setup();
+  delete g.store.ROUTE_PROVIDER;
+  g.ss.getSheetByName('설정').appendRow(['경로제공자', 'estimate', '']);
+  g.ss.getSheetByName('설정').appendRow(['웹앱URL', 'https://script.google.com/macros/s/DEPLOY/exec', '']);
+  vm.runInContext('sheetConfigMemo_ = null', vctx);
+  assert.strictEqual(vctx.routeProvider_(), 'estimate');
+  assert.match(vctx.buildTripLink_('2026-11-17', 'V1', '1'), /^https:\/\/script\.google\.com\/macros\/s\/DEPLOY\/exec\?/);
+});

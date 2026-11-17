@@ -84,8 +84,36 @@ function routeProvider_() {
   return getProp_('ROUTE_PROVIDER') || 'tmap';
 }
 
+/**
+ * 비밀이 아닌 설정은 설정 시트에서도 읽는다(스크립트 속성이 우선).
+ * API 키·토큰 같은 비밀값은 스크립트 속성에만 둔다.
+ */
+var SHEET_CONFIG = {
+  WEBAPP_URL: '웹앱URL',
+  ROUTE_PROVIDER: '경로제공자',
+  NAV_APP: '길안내앱',
+  NOTIFY_MODE: '전송방식',
+  NOTIFY_EMAIL: '전송이메일'
+};
+var sheetConfigMemo_ = null;
+
 function getProp_(key) {
-  return PropertiesService.getScriptProperties().getProperty(key);
+  var v = PropertiesService.getScriptProperties().getProperty(key);
+  if (v || !SHEET_CONFIG[key]) return v;
+  if (!sheetConfigMemo_) {
+    sheetConfigMemo_ = {};
+    try {
+      var sh = getSpreadsheet_().getSheetByName(SHEET.SETTINGS);
+      if (sh && sh.getLastRow() > 0) {
+        sh.getRange(1, 1, sh.getLastRow(), 2).getValues().forEach(function (r) {
+          sheetConfigMemo_[String(r[0]).trim()] = String(r[1]).trim();
+        });
+      }
+    } catch (e) {
+      // 시트를 못 읽으면 스크립트 속성만 쓴다
+    }
+  }
+  return sheetConfigMemo_[SHEET_CONFIG[key]] || null;
 }
 
 function setProp_(key, value) {
