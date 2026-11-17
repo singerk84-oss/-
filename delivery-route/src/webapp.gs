@@ -168,6 +168,7 @@ function tapStop(p, index, action) {
       if (row['도착시각'] === '') patch['도착시각'] = now;
       updateRow_(sh, row._row, patch);
       if (current === rows.length - 1) setTripStatus_(p.d, p.v, p.t, '완료');
+      safeSyncTripWaypoints_(p.d, p.v, p.t);
     } else {
       throw new Error('알 수 없는 동작입니다.');
     }

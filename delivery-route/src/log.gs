@@ -97,3 +97,97 @@ function closeDay_(date, vehicleId, odometerKm) {
   });
   return { odometer: odo, real: real, api: api, diff: diff, prev: prev };
 }
+
+/* ---------------- 회차 탭 경유지 표시 ---------------- */
+
+var WAYPOINT_PREFIX = '경유지';
+var COLOR_DONE_BG = '#c6efce';   // 완료: 녹색
+var COLOR_DONE_FG = '#006100';
+
+/** 회차 탭에 경유지1..n 컬럼이 없으면 오른쪽에 추가 → {k: 컬럼번호} */
+function ensureWaypointColumns_(sh, n) {
+  var idx = headerIndex_(sh);
+  var add = [];
+  for (var k = 1; k <= n; k++) if (!idx[WAYPOINT_PREFIX + k]) add.push(WAYPOINT_PREFIX + k);
+  if (add.length) {
+    sh.getRange(1, sh.getLastColumn() + 1, 1, add.length).setValues([add]).setFontWeight('bold');
+    idx = headerIndex_(sh);
+  }
+  var cols = {};
+  for (var j = 1; j <= n; j++) cols[j] = idx[WAYPOINT_PREFIX + j];
+  return cols;
+}
+
+/**
+ * 회차 탭의 경유지 칸을 운행일지 기준으로 다시 그린다.
+ * 칸 내용: "거래처명 (예정 HH:MM)" 또는 완료 후 "거래처명 ✓HH:MM", 완료된 칸은 녹색.
+ * vehicleId·trip을 생략하면 그 일자의 모든 회차를 처리한다.
+ */
+function syncTripWaypoints_(date, vehicleId, trip) {
+  var sh = getSheet_(SHEET.TRIPS, HEADERS.TRIPS);
+  var trips = readTable_(SHEET.TRIPS, HEADERS.TRIPS).filter(function (r) {
+    if (dateKey_(r['일자']) !== date) return false;
+    if (vehicleId && String(r['차량ID']) !== String(vehicleId)) return false;
+    if (trip && String(r['회차']) !== String(trip)) return false;
+    return true;
+  });
+  if (!trips.length) return 0;
+
+  var logs = readTable_(SHEET.LOG).filter(function (r) { return dateKey_(r['일자']) === date; })
+    .sort(function (a, b) { return a._row - b._row; });
+  var eta = {};
+  readTable_(SHEET.TODAY).forEach(function (r) {
+    if (dateKey_(r['일자']) !== date) return;
+    eta[r['배정차량ID'] + '#' + r['회차'] + '#' + String(r['거래처명']).trim()] = timeText_(r['예상도착시각']);
+  });
+
+  var stopsOf = {};
+  var maxStops = 0;
+  trips.forEach(function (t) {
+    var key = t['차량ID'] + '#' + t['회차'];
+    stopsOf[key] = logs.filter(function (r) {
+      return r['차량ID'] + '#' + r['회차'] === key && String(r['거래처명']).trim() !== RETURN_LABEL;
+    });
+    maxStops = Math.max(maxStops, stopsOf[key].length);
+  });
+  var cols = ensureWaypointColumns_(sh, maxStops);
+  var statusCol = headerIndex_(sh)['상태'];
+  var lastCol = sh.getLastColumn();
+  var firstWp = cols[1];
+
+  trips.forEach(function (t) {
+    var key = t['차량ID'] + '#' + t['회차'];
+    var stops = stopsOf[key];
+    var width = lastCol - firstWp + 1;
+    var text = [[]];
+    var bg = [[]];
+    var fg = [[]];
+    for (var c = 0; c < width; c++) {
+      var s = stops[c];
+      if (!s) { text[0].push(''); bg[0].push(null); fg[0].push(null); continue; }
+      var name = String(s['거래처명']).trim();
+      var done = s['완료시각'] !== '';
+      var e = eta[key + '#' + name];
+      text[0].push(done ? name + ' ✓' + timeText_(s['완료시각']) : name + (e ? ' (예정 ' + e + ')' : ''));
+      bg[0].push(done ? COLOR_DONE_BG : null);
+      fg[0].push(done ? COLOR_DONE_FG : null);
+    }
+    var range = sh.getRange(t._row, firstWp, 1, width);
+    range.setValues(text).setBackgrounds(bg).setFontColors(fg);
+    if (statusCol) {
+      var tripDone = t['상태'] === '완료';
+      sh.getRange(t._row, statusCol).setBackground(tripDone ? COLOR_DONE_BG : null)
+        .setFontColor(tripDone ? COLOR_DONE_FG : null);
+    }
+  });
+  return trips.length;
+}
+
+/** 경유지 표시는 부가 기능이라 실패해도 본 기록은 유지한다 */
+function safeSyncTripWaypoints_(date, vehicleId, trip) {
+  try {
+    syncTripWaypoints_(date, vehicleId, trip);
+  } catch (e) {
+    logError_('경유지표시', e && e.message ? e.message : e);
+  }
+}

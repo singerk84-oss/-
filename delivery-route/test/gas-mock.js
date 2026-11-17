@@ -21,11 +21,16 @@ class Range {
   }
   setValue(v) { this.sheet.set(this.row, this.col, v); return this; }
   setFontWeight() { return this; }
+  setBackgrounds(m) { m.forEach((line, r) => line.forEach((v, c) => this.sheet.setBg(this.row + r, this.col + c, v))); return this; }
+  setBackground(v) { this.sheet.setBg(this.row, this.col, v); return this; }
+  setFontColors() { return this; }
+  setFontColor() { return this; }
   insertCheckboxes() { return this; }
 }
 
 class Sheet {
-  constructor(name) { this.name = name; this.data = []; }
+  constructor(name) { this.name = name; this.data = []; this.bg = {}; }
+  setBg(r, c, v) { this.bg[r + ',' + c] = v; }
   getName() { return this.name; }
   set(r, c, v) {
     while (this.data.length < r) this.data.push([]);
@@ -41,7 +46,15 @@ class Sheet {
   getMaxRows() { return Math.max(this.data.length, 100); }
   getRange(r, c, nr = 1, nc = 1) { return new Range(this, r, c, nr, nc); }
   appendRow(row) { const r = this.getLastRow() + 1; row.forEach((v, c) => this.set(r, c + 1, v)); }
-  deleteRow(r) { this.data.splice(r - 1, 1); }
+  deleteRow(r) {
+    this.data.splice(r - 1, 1);
+    const nb = {};
+    for (const [k, v] of Object.entries(this.bg)) {
+      const [rr, cc] = k.split(',').map(Number);
+      if (rr < r) nb[k] = v; else if (rr > r) nb[(rr - 1) + ',' + cc] = v;
+    }
+    this.bg = nb;
+  }
   setFrozenRows() {}
 }
 

@@ -162,3 +162,35 @@ test('설정 시트의 경로제공자·웹앱URL 값을 스크립트 속성 대
   assert.strictEqual(vctx.routeProvider_(), 'estimate');
   assert.match(vctx.buildTripLink_('2026-11-17', 'V1', '1'), /^https:\/\/script\.google\.com\/macros\/s\/DEPLOY\/exec\?/);
 });
+
+test('회차 탭에 경유지가 표시되고 완료된 경유지는 녹색', () => {
+  const { g, vctx } = setup();
+  vctx.menuSample();
+  vctx.menuPlan();
+  const sh = g.ss.getSheetByName('회차');
+  const head = sh.data[0];
+  const wp1 = head.indexOf('경유지1') + 1;
+  assert.ok(wp1 > 0, '경유지1 컬럼 생성');
+  const trips = table(vctx, '회차');
+  const t = trips.find((x) => x['차량ID'] === 'V10');
+  assert.match(t['경유지1'], /^예시-원거리공장 \(예정 \d\d:\d\d\)$/);
+  assert.strictEqual(sh.bg[t._row + ',' + wp1] || null, null);
+
+  const p = Object.fromEntries(new URL(t['링크']).searchParams);
+  vctx.tapStop(p, 0, 'start');
+  assert.strictEqual(sh.bg[t._row + ',' + wp1] || null, null, '출발만 했을 때는 색 없음');
+  g.clock.now = new Date('2026-11-16T12:20:00+09:00');
+  vctx.tapStop(p, 0, 'complete');
+  assert.strictEqual(sh.bg[t._row + ',' + wp1], '#c6efce');
+  assert.match(table(vctx, '회차').find((x) => x['차량ID'] === 'V10')['경유지1'], /✓12:20$/);
+
+  // 회사 복귀까지 끝나면 상태 칸도 녹색
+  vctx.tapStop(p, 1, 'start');
+  vctx.tapStop(p, 1, 'complete');
+  const statusCol = head.indexOf('상태') + 1;
+  assert.strictEqual(sh.bg[t._row + ',' + statusCol], '#c6efce');
+
+  // 다른 회차 경유지는 그대로
+  const other = table(vctx, '회차').find((x) => x['차량ID'] === 'V5');
+  assert.strictEqual(sh.bg[other._row + ',' + wp1] || null, null);
+});

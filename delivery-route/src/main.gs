@@ -9,6 +9,7 @@ function onOpen() {
     .addItem('③ 배차·경로 계산', 'menuPlan')
     .addItem('④ 회차 링크 전송', 'menuSend')
     .addSeparator()
+    .addItem('회차 경유지 새로고침', 'menuSyncWaypoints')
     .addItem('링크 다시 만들기', 'menuLinks')
     .addItem('카카오 로그인(나에게 보내기 권한)', 'menuKakaoLogin')
     .addItem('예시 데이터 넣기(시험용)', 'menuSample')
@@ -42,6 +43,11 @@ function menuPlan() {
   });
   alert_('회차 ' + r.trips.length + '개, 링크 ' + r.links + '개 생성\n\n' + lines.join('\n') +
     (r.warnings.length ? '\n\n경고\n- ' + r.warnings.join('\n- ') : ''));
+}
+
+function menuSyncWaypoints() {
+  var n = syncTripWaypoints_(todayKey_());
+  alert_('회차 ' + n + '개의 경유지 표시를 새로 고쳤습니다. 완료된 경유지는 녹색입니다.');
 }
 
 function menuLinks() {
@@ -214,6 +220,7 @@ function planDayLocked_(date) {
     });
   });
   createLogRows_(date, legsByTrip);
+  safeSyncTripWaypoints_(date);
 
   var links = 0;
   try {
