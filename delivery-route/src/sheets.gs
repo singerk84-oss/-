@@ -154,6 +154,13 @@ function checkTemplate_() {
       return;
     }
     var idx = headerIndex_(sh);
+    var optional = OPTIONAL_HEADERS[pair[0]] || [];
+    var added = optional.filter(function (h) { return !idx[h]; });
+    if (added.length) {
+      sh.getRange(1, sh.getLastColumn() + 1, 1, added.length).setValues([added]).setFontWeight('bold');
+      problems.push(pair[0] + ' 시트에 컬럼 추가: ' + added.join(', '));
+      idx = headerIndex_(sh);
+    }
     var missing = pair[1].filter(function (h) { return !idx[h]; });
     if (missing.length) problems.push(pair[0] + ' 시트 컬럼 누락: ' + missing.join(', '));
   });

@@ -9,7 +9,10 @@
  *   SPREADSHEET_ID      : 웹앱이 사용할 스프레드시트 ID(없으면 연결된 시트 사용)
  *   NOTIFY_MODE         : 'kakao_memo' | 'email'(기본) | 'alimtalk'(2단계)
  *   NOTIFY_EMAIL        : 이메일 전송 대상(없으면 스크립트 소유자)
- *   DISTANCE_MODE       : 'kakao'(기본) | 'estimate'(API 없이 직선거리 추정, 시험용)
+ *   TMAP_APP_KEY        : SK오픈API TMAP 앱 키(화물차 경로안내)
+ *   ROUTE_PROVIDER      : 'tmap'(기본, 화물차 경로) | 'kakao'(승용차 경로) | 'estimate'(API 없이 직선거리 추정, 시험용)
+ *   DISTANCE_MODE       : (이전 설정) 'estimate'이면 ROUTE_PROVIDER=estimate 와 같다
+ *   NAV_APP             : 기사 길안내 앱 'tmap'(기본) | 'kakaomap'
  */
 
 var SHEET = {
@@ -28,12 +31,13 @@ var SHEET = {
 /** 각 시트의 헤더(1행). 순서가 곧 컬럼 순서다. */
 var HEADERS = {
   CUSTOMERS: ['거래처명', '주소', '위도', '경도', '체류시간(분)'],
-  VEHICLES: ['차량ID', '차량명', '차량번호', '톤수', '최대적재중량(kg)', '적재함길이(mm)', '기사명', '기사휴대폰'],
+  VEHICLES: ['차량ID', '차량명', '차량번호', '톤수', '최대적재중량(kg)', '적재함길이(mm)', '기사명', '기사휴대폰',
+    '차량높이(cm)', '차량폭(cm)', '차량길이(cm)', '차량총중량(kg)', 'TMAP차종'],
   TODAY: ['일자', '거래처명', '화물중량(kg)', '화물최대길이(mm)', '배정차량ID', '회차', '방문순서', '예상도착시각', '수동지정', '경고'],
   LOG: ['일자', '차량ID', '회차', '거래처명', '출발시각', '도착시각', '완료시각', '구간거리(API,km)'],
   CLOSE: ['일자', '차량ID', '계기판주행거리(km)', '전일대비실주행(km)', 'API합산거리(km)', '차이(km)'],
   TRIPS: ['일자', '차량ID', '회차', '출발예정', '복귀예정', '방문수', '총거리(km)', '총소요(분)', '링크', '전송시각', '상태'],
-  LEG_CACHE: ['일자', '출발좌표', '도착좌표', '거리(m)', '시간(초)', '출처'],
+  LEG_CACHE: ['일자', '차량프로필', '출발좌표', '도착좌표', '거리(m)', '시간(초)', '출처'],
   ERROR_LOG: ['시각', '구분', '내용']
 };
 
@@ -68,6 +72,17 @@ var API_RETRY_WAIT_MS = 800;
 /** 직선거리 추정 모드 계수(시험용): 도로 우회 계수와 평균 속도 */
 var ESTIMATE_ROAD_FACTOR = 1.3;
 var ESTIMATE_SPEED_KMH = 40;
+
+/** 시트 템플릿에 없어도 되는(없으면 자동으로 추가하는) 컬럼 */
+var OPTIONAL_HEADERS = {
+  '차량': ['차량높이(cm)', '차량폭(cm)', '차량길이(cm)', '차량총중량(kg)', 'TMAP차종']
+};
+
+/** 경로 제공자: tmap | kakao | estimate */
+function routeProvider_() {
+  if (getProp_('DISTANCE_MODE') === 'estimate') return 'estimate';
+  return getProp_('ROUTE_PROVIDER') || 'tmap';
+}
 
 function getProp_(key) {
   return PropertiesService.getScriptProperties().getProperty(key);

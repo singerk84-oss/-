@@ -103,10 +103,13 @@ function planDayLocked_(date) {
     return {
       id: String(r['차량ID']).trim(),
       maxWeight: toNumber(r['최대적재중량(kg)'], 0),
-      bedLength: toNumber(r['적재함길이(mm)'], 0)
+      bedLength: toNumber(r['적재함길이(mm)'], 0),
+      profile: vehicleProfile_(r)
     };
   });
   if (!vehicles.length) throw new Error('차량 시트에 차량을 입력하세요.');
+  var profileWarn = [];
+  vehicles.forEach(function (v) { profileWarn = profileWarn.concat(profileWarnings_(v.id, v.profile)); });
 
   // 오늘배송: 일자가 비어 있으면 오늘로 채운다
   var todaySh = getSheet_(SHEET.TODAY);
@@ -148,11 +151,15 @@ function planDayLocked_(date) {
     rowMap.push({ row: r._row, name: name });
   });
 
-  var m = buildMatrix(date, points);
+  // 차량별 행렬(화물차는 차량마다 지날 수 있는 길이 다르다)
+  var mats = buildVehicleMatrices(date, points, vehicles);
+  var timeByVehicle = {};
+  vehicles.forEach(function (v) { timeByVehicle[v.id] = mats[v.id].time; });
   var plan = planDeliveries({
     deliveries: deliveries,
     vehicles: vehicles,
-    time: m.time,
+    time: mats[vehicles[0].id].time,
+    timeByVehicle: timeByVehicle,
     dayStart: s.dayStart,
     dayEnd: s.dayEnd,
     loadingMin: s.loadingMin
@@ -186,6 +193,7 @@ function planDayLocked_(date) {
   var tripsSh = getSheet_(SHEET.TRIPS);
   var legsByTrip = [];
   plan.trips.forEach(function (t) {
+    var m = mats[t.vehicleId];
     var prev = 0;
     var legs = [];
     var total = 0;
@@ -214,12 +222,16 @@ function planDayLocked_(date) {
     plan.warnings.push('링크 생성 실패: ' + e.message);
   }
   Object.keys(preWarn).forEach(function (row) { plan.warnings.push(row + '행: ' + preWarn[row]); });
+  plan.warnings = plan.warnings.concat(profileWarn);
+  var failedLegs = 0;
+  Object.keys(mats).forEach(function (k) { failedLegs = Math.max(failedLegs, mats[k].failed.length); });
+  if (failedLegs) plan.warnings.push('경로를 찾지 못한 구간 ' + failedLegs + '개(진입 불가로 처리, 오류로그 확인)');
   return { trips: plan.trips, warnings: plan.warnings, links: links };
 }
 
 /**
  * 시험용 예시 데이터(1톤 2회, 5톤 3회, 10톤 1회가 나오도록 구성).
- * 회사 좌표를 기준으로 가상의 거래처 좌표를 만든다. DISTANCE_MODE=estimate 에서 확인용.
+ * 회사 좌표를 기준으로 가상의 거래처 좌표를 만든다. ROUTE_PROVIDER=estimate 에서 확인용.
  */
 function menuSample() {
   var s = readSettings_();
@@ -250,11 +262,18 @@ function menuSample() {
     });
     appendRow_(today, { '일자': date, '거래처명': x[0], '화물중량(kg)': x[3], '화물최대길이(mm)': x[4], '수동지정': false });
   });
+  checkTemplate_(); // 차량 시트에 화물차 제원 컬럼이 없으면 추가
   var veh = getSheet_(SHEET.VEHICLES);
   if (readTable_(SHEET.VEHICLES).length === 0) {
-    [['V1', '1톤 예시', '', '1톤', 1000, 2800, '', ''],
-     ['V5', '5톤 예시', '', '5톤', 5000, 6200, '', ''],
-     ['V10', '10톤 예시', '', '10톤', 10000, 9100, '', '']].forEach(function (r) { veh.appendRow(r); });
+    // 제원은 대략적인 예시값이다. 실제 차량등록증·제원표 값으로 바꿔 넣는다. TMAP차종은 공식 코드표 확인 후 입력.
+    [['V1', '1톤 예시', '1톤', 1000, 2800, 200, 175, 510, 3000],
+     ['V5', '5톤 예시', '5톤', 5000, 6200, 300, 249, 900, 11500],
+     ['V10', '10톤 예시', '10톤', 10000, 9100, 350, 249, 1150, 20000]].forEach(function (r) {
+      appendRow_(veh, {
+        '차량ID': r[0], '차량명': r[1], '톤수': r[2], '최대적재중량(kg)': r[3], '적재함길이(mm)': r[4],
+        '차량높이(cm)': r[5], '차량폭(cm)': r[6], '차량길이(cm)': r[7], '차량총중량(kg)': r[8]
+      });
+    });
   }
-  alert_('예시 데이터를 넣었습니다. 스크립트 속성 DISTANCE_MODE=estimate 로 두고 [③ 배차·경로 계산]을 실행하세요.');
+  alert_('예시 데이터를 넣었습니다. 스크립트 속성 ROUTE_PROVIDER=estimate 로 두고 [③ 배차·경로 계산]을 실행하세요.');
 }

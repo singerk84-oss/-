@@ -67,7 +67,7 @@ function createGas({ props = {}, now = new Date('2026-11-16T08:00:00+09:00') } =
   }
   const mails = [];
   const ctx = {
-    console, Math, JSON, Object, Array, Number, String, Error, isNaN, encodeURIComponent,
+    console, Math, JSON, Object, Array, Number, String, Error, isNaN, isFinite, Infinity, encodeURIComponent,
     Date: FakeDate,
     SpreadsheetApp: { getActiveSpreadsheet: () => ss, openById: () => ss },
     PropertiesService: {

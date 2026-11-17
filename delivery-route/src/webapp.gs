@@ -91,7 +91,7 @@ function getTripState(p) {
       arrive: timeText_(r['도착시각']),
       complete: timeText_(r['완료시각']),
       distKm: r['구간거리(API,km)'],
-      nav: lat !== '' && lat !== null && lat !== undefined ? navLink_(isReturn ? '회사' : name, lat, lng) : ''
+      nav: lat !== '' && lat !== null && lat !== undefined ? navLinks_(isReturn ? '회사' : name, lat, lng) : null
     };
   });
 

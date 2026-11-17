@@ -87,9 +87,22 @@
   // 업체명 탭: 출발 기록 + 길안내 열기(팝업 차단을 피하려고 탭 순간 바로 연다)
   function go(i) {
     var s = state.stops[i];
-    if (s.nav) window.open(s.nav, '_blank');
-    call('tapStop', [i, 'start']);
+    var url = s.nav ? s.nav.main : '';
+    if (/^https?:/.test(url)) {
+      // 새 창은 탭 순간에 열어야 팝업 차단을 피한다
+      window.open(url, '_blank');
+      call('tapStop', [i, 'start']);
+    } else {
+      // 앱 스킴(tmap://)은 페이지를 떠날 수 있으므로 출발 기록이 저장된 뒤에 연다
+      call('tapStop', [i, 'start'], function () { if (url) openNav(url); });
+    }
   }
+  // tmap:// 같은 앱 스킴은 현재 창에서 열어야 앱이 뜬다. https 링크는 새 창으로 연다.
+  function openNav(url) {
+    if (/^https?:/.test(url)) window.open(url, '_blank');
+    else window.top.location.href = url;
+  }
+
   function arrive(i) { call('tapStop', [i, 'arrive']); }
   function complete(i) {
     var s = state.stops[i];
@@ -128,7 +141,10 @@
             : '<button class="btn-sub"' + dis + ' onclick="arrive(' + s.index + ')">도착</button>') +
           '<button class="btn-ok"' + dis + ' onclick="complete(' + s.index + ')">' +
           (s.isReturn ? '복귀 완료' : '완료') + '</button></div>';
-        if (s.nav) h += '<a class="navlink" href="' + esc(s.nav) + '" target="_blank">길안내 다시 열기</a>';
+        if (s.nav) {
+          h += '<a class="navlink" href="' + esc(s.nav.main) + '" target="_top">' + esc(s.nav.mainLabel) + ' 길안내 다시 열기</a>';
+          if (s.nav.alt) h += '<a class="navlink" href="' + esc(s.nav.alt) + '" target="_blank">' + esc(s.nav.altLabel) + '로 열기</a>';
+        }
       }
     }
     return h + '</div>';

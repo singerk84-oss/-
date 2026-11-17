@@ -10,7 +10,7 @@ const FILES = ['config.gs', 'util.gs', 'sheets.gs', 'geocode.gs', 'matrix.gs', '
   'links.gs', 'notify.gs', 'log.gs', 'webapp.gs', 'main.gs'];
 
 function setup() {
-  const g = createGas({ props: { DISTANCE_MODE: 'estimate' } });
+  const g = createGas({ props: { ROUTE_PROVIDER: 'estimate' } });
   const alerts = [];
   g.ctx.SpreadsheetApp.getUi = () => ({ alert: (m) => alerts.push(m) });
   g.ctx.HtmlService = {
@@ -78,7 +78,8 @@ test('예시 데이터로 회차 6개·링크 6개, 웹앱 완료 처리, 일일
   assert.strictEqual(st.stops.length, 2);
   assert.strictEqual(st.current, 0);
   assert.strictEqual(st.isLastTrip, true);
-  assert.match(st.stops[0].nav, /^https:\/\/map\.kakao\.com\/link\/to\//);
+  assert.match(st.stops[0].nav.main, /^tmap:\/\/route\?goalname=/);
+  assert.match(st.stops[0].nav.alt, /^https:\/\/map\.kakao\.com\/link\/to\//);
 
   assert.throws(() => vctx.tapStop(p, 0, 'complete'), /출발을 기록/);
   assert.throws(() => vctx.tapStop(p, 1, 'start'), /차례/);

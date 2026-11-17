@@ -4,7 +4,7 @@ const path = require('path');
 const vm = require('vm');
 
 function loadGs(files) {
-  const ctx = vm.createContext({ console, Math, Date, JSON, Object, Array, Number, String, Error, isNaN });
+  const ctx = vm.createContext({ console, Math, Date, JSON, Object, Array, Number, String, Error, isNaN, isFinite, Infinity });
   for (const f of files) {
     const code = fs.readFileSync(path.join(__dirname, '..', 'src', f), 'utf8');
     vm.runInContext(code, ctx, { filename: f });

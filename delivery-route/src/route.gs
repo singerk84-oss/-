@@ -59,6 +59,8 @@ function exactRoute_(points, time) {
     }
   }
   dfs(0, 0);
+  // 모든 순서가 진입 불가(Infinity) 구간을 포함하면 입력 순서를 그대로 돌려준다
+  if (!bestOrder) return { order: points.slice(), travelMin: Infinity, method: 'exact' };
   return { order: bestOrder, travelMin: best, method: 'exact' };
 }
 

@@ -19,7 +19,8 @@
  *   deliveries: [{id, point, weight, length, stayMin, manual, vehicleId, trip}]
  *               point = 시간행렬 인덱스(0은 회사)
  *   vehicles:   [{id, maxWeight, bedLength}]
- *   time:       이동시간 행렬(분)
+ *   time:       이동시간 행렬(분) — 모든 차량 공통
+ *   timeByVehicle: {차량ID: 행렬} — 차량별 행렬(화물차 제한 반영). 있으면 time보다 우선
  *   dayStart, dayEnd: 자정 기준 분
  *   loadingMin: 회차별 상차시간(분)
  * @return {{rows:Object[], trips:Object[], warnings:string[]}}
@@ -27,7 +28,9 @@
 function planDeliveries(input) {
   var D = input.deliveries;
   var V = input.vehicles;
-  var T = input.time;
+  function timeOf(vid) {
+    return (input.timeByVehicle && input.timeByVehicle[vid]) || input.time;
+  }
   var vehById = {};
   V.forEach(function (v) { vehById[v.id] = v; });
 
@@ -36,8 +39,12 @@ function planDeliveries(input) {
 
   // --- 1. 후보 차량과 수동지정 처리 ---------------------------------------
   var cand = D.map(function (d, i) {
+    var reachable = function (v) {
+      var T = timeOf(v.id);
+      return isFinite(T[0][d.point]) && isFinite(T[d.point][0]);
+    };
     var fits = V.filter(function (v) {
-      return d.length <= v.bedLength && d.weight <= v.maxWeight;
+      return d.length <= v.bedLength && d.weight <= v.maxWeight && reachable(v);
     }).map(function (v) { return v.id; });
 
     if (d.manual && d.vehicleId) {
@@ -48,12 +55,15 @@ function planDeliveries(input) {
       }
       if (d.length > mv.bedLength) rowWarn[i].push('수동지정 차량 적재함 길이 부족(' + d.length + 'mm > ' + mv.bedLength + 'mm)');
       if (d.weight > mv.maxWeight) rowWarn[i].push('수동지정 차량 적재중량 초과(' + d.weight + 'kg > ' + mv.maxWeight + 'kg)');
+      if (!reachable(mv)) rowWarn[i].push('수동지정 차량이 진입할 경로 없음(높이·중량 제한 등)');
       return [d.vehicleId];
     }
     if (fits.length === 0) {
       var lenOk = V.some(function (v) { return d.length <= v.bedLength; });
-      rowWarn[i].push(lenOk ? '적재 가능 차량 없음(중량 초과) — 차량 추가 필요'
-        : '적재 가능 차량 없음(화물 길이 초과) — 차량 추가 필요');
+      var loadOk = V.some(function (v) { return d.length <= v.bedLength && d.weight <= v.maxWeight; });
+      rowWarn[i].push(!lenOk ? '적재 가능 차량 없음(화물 길이 초과) — 차량 추가 필요'
+        : !loadOk ? '적재 가능 차량 없음(중량 초과) — 차량 추가 필요'
+          : '실을 수 있는 차량이 진입할 경로 없음(높이·중량 제한 등) — 주소·차량 확인 필요');
     }
     return fits;
   });
@@ -77,8 +87,9 @@ function planDeliveries(input) {
 
   // --- 경로 시간 계산(멤버 집합별 캐시) ------------------------------------
   var routeCache = {};
-  function routeOf(members) {
-    var key = members.slice().sort(function (a, b) { return a - b; }).join(',');
+  function routeOf(members, vid) {
+    var T = timeOf(vid);
+    var key = vid + ':' + members.slice().sort(function (a, b) { return a - b; }).join(',');
     if (routeCache[key]) return routeCache[key];
     var k = members.length;
     var pts = [0].concat(members.map(function (m) { return D[m].point; }));
@@ -122,7 +133,7 @@ function planDeliveries(input) {
     var total = 0;
     ts.forEach(function (t) {
       if (!t.members.length) return;
-      var dur = input.loadingMin + routeOf(t.members).routeMin;
+      var dur = input.loadingMin + routeOf(t.members, t.vehicleId).routeMin;
       perVeh[t.vehicleId] = (perVeh[t.vehicleId] || 0) + dur;
       total += dur;
     });
@@ -265,8 +276,9 @@ function planDeliveries(input) {
     mine.sort(function (p, q) { return p.number - q.number; });
 
     var clock = input.dayStart;
+    var T = timeOf(v.id);
     mine.forEach(function (t) {
-      var r = routeOf(t.members);
+      var r = routeOf(t.members, v.id);
       var loadStart = clock;
       var depart = clock + input.loadingMin;
       var now = depart;

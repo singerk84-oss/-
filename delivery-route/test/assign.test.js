@@ -96,3 +96,36 @@ test('예상도착시각은 출발(상차 후) + 이동 + 앞 업체 체류 순�
   assert.strictEqual(q.etaMin, p.etaMin + 30 + 10);
   assert.strictEqual(res.trips[0].returnMin, q.etaMin + 30 + 20);
 });
+
+test('차량별 행렬: 같은 구간도 차량마다 다른 시간으로 예상도착시각 계산', () => {
+  const list = [['P', 10, 0, 100, 1000]];
+  const input = buildInput(list, { vehicles: [VEHICLES[2]] });
+  // 10톤은 높이 제한 우회로 2배 걸린다고 가정
+  input.timeByVehicle = { V10: input.time.map((r) => r.map((x) => x * 2)) };
+  const res = gs.planDeliveries(input);
+  assert.strictEqual(res.rows[0].etaMin, 480 + 30 + 20);
+});
+
+test('진입 경로가 없는 차량은 후보에서 빠진다', () => {
+  const list = [['골목상가', 5, 5, 800, 2000]];
+  const input = buildInput(list);
+  const blocked = input.time.map((r) => r.slice());
+  blocked[0][1] = Infinity;
+  blocked[1][0] = Infinity;
+  // 1톤은 못 들어가고 5톤·10톤은 들어간다고 가정
+  input.timeByVehicle = { V1: blocked, V5: input.time, V10: input.time };
+  const res = gs.planDeliveries(input);
+  assert.notStrictEqual(res.rows[0].vehicleId, 'V1');
+  assert.ok(res.rows[0].vehicleId);
+});
+
+test('실을 수 있는 차량이 모두 진입 불가면 경고', () => {
+  const list = [['초중량', 5, 5, 9500, 8000]]; // 10톤만 실을 수 있음
+  const input = buildInput(list);
+  const blocked = input.time.map((r) => r.slice());
+  blocked[0][1] = Infinity;
+  input.timeByVehicle = { V10: blocked };
+  const res = gs.planDeliveries(input);
+  assert.strictEqual(res.rows[0].vehicleId, '');
+  assert.match(res.rows[0].warnings.join(), /진입할 경로 없음/);
+});
