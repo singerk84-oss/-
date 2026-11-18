@@ -47,6 +47,9 @@
 ## 시험
 `npm test` — 경로 최적화(전수 탐색 대조), 배차 규칙, Apps Script 서비스를 흉내 낸 통합 시험(예시 데이터 → 회차 6개·링크 6개 → 웹앱 → 마감).
 
+## 보류(설계만 확정)
+- 도착 자동 기록·완료 누락 알림: [DESIGN-auto-arrival.md](DESIGN-auto-arrival.md)
+
 ## 남은 일
 - TMAP 화물차 API 규격(matrix.gs TMAP_TRUCK)·차종 코드·앱 스킴(links.gs tmapLink_)을 공식 문서와 대조 — 이 세션 네트워크에서 문서 사이트 접속이 막혀 미확인.
 - TMAP·카카오 키 발급 후 실제 주소·경로로 검증(ROUTE_PROVIDER=estimate 해제).
