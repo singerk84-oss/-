@@ -47,6 +47,16 @@
 ## 시험
 `npm test` — 경로 최적화(전수 탐색 대조), 배차 규칙, Apps Script 서비스를 흉내 낸 통합 시험(예시 데이터 → 회차 6개·링크 6개 → 웹앱 → 마감).
 
+## 배포 대상(Apps Script)
+| 대상 | 시트 | scriptId |
+| --- | --- | --- |
+| 운영(우리 회사) | 배송 경로·운행일지 시스템 `1l8Ftp7kRF0khdneORvItOwFZe7qZXt0Y2yAnpLjkLw4` | `1w3jjLCQ66r_YYVtU0BYMUeIKs96NanOp28U1q4Zuwf522gGPNzjgBSM-` (웹앱 배포 `AKfycbzmO0…`) |
+| 템플릿(테스트 베드 배포용) | 배송 경로·운행일지 시스템(템플릿) `1zhstpD0RN7w2mLj13UISzPtw6QOwzbZhJPHT02cInrw` | `1zDhH6P90NA7ImQ3sV5qaG3MCTcSWYc0mZFpEb6F5JM6fxOHCAxmownLS` (웹앱 배포 없음, 사본 받은 회사가 배포) |
+
+- 코드 수정 후 두 곳 모두 `clasp push` 한다(.clasp.json의 scriptId만 바꿔서). 운영은 웹앱 배포 버전도 갱신.
+- 템플릿 사본을 받은 회사의 시트는 독립 프로젝트라 자동 갱신되지 않는다.
+- 테스트 베드 설치 안내: [INSTALL-testbed.md](INSTALL-testbed.md)
+
 ## 보류(설계만 확정)
 - 도착 자동 기록·완료 누락 알림: [DESIGN-auto-arrival.md](DESIGN-auto-arrival.md)
 
